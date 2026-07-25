@@ -111,10 +111,15 @@ def get_mens_100m_url(meeting_url):
     return "https://worldathletics.org" + href if href.startswith("/") else href
 
 
-def get_diamond_league_meeting_links():
-    """Scrape the Diamond League meetings index page for all meeting URLs."""
-    resp = requests.get("https://worldathletics.org/results/diamond-league-meetings",
-                         headers=HEADERS, timeout=15)
+def get_diamond_league_meeting_links(year=None):
+    """Scrape the Diamond League meetings index page for meeting URLs.
+    If year is given (2016-2021 confirmed working), fetches that specific year.
+    If year is None, fetches whatever the default page shows (2019-2021)."""
+    url = "https://worldathletics.org/results/diamond-league-meetings"
+    if year:
+        url += f"?year={year}"
+
+    resp = requests.get(url, headers=HEADERS, timeout=15)
     resp.raise_for_status()
 
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -125,7 +130,7 @@ def get_diamond_league_meeting_links():
         if a["href"].startswith("/results/diamond-league-meetings/")
     ]
     meeting_links = ["https://worldathletics.org" + link for link in meeting_links]
-    meeting_links = list(dict.fromkeys(meeting_links))  # dedupe, preserve order
+    meeting_links = list(dict.fromkeys(meeting_links))
 
     return meeting_links
 

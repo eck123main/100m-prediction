@@ -5,21 +5,9 @@ Run this file directly to (re)build 100m_races_dataset.csv from scratch:
 
 import pandas as pd
 from scraper import scrape_race, get_mens_100m_url, get_diamond_league_meeting_links, generate_round_variants
+from links import CHAMPIONSHIP_URLS, MANUAL_DIAMOND_LEAGUE_URLS
 
 CSV_PATH = "100m_races_dataset.csv"
-
-CHAMPIONSHIP_URLS = [
-    "https://worldathletics.org/results/olympic-games/2024/the-xxxiii-olympic-games-7153115/men/100-metres/final/result",
-    "https://worldathletics.org/results/world-athletics-championships/2023/world-athletics-championships-budapest-2023-7138987/men/100-metres/final/result",
-    "https://worldathletics.org/results/olympic-games/2021/the-xxxii-olympic-games-7132391/men/100-metres/final/result",
-    "https://worldathletics.org/competitions/world-athletics-championships/world-athletics-championships-oregon-2022-7137279/results/men/100-metres/final/result",
-    "https://worldathletics.org/results/world-athletics-championships/2019/iaaf-world-athletics-championships-doha-2019-7125365/men/100-metres/final/result",
-    "https://worldathletics.org/results/world-athletics-championships/2017/iaaf-world-championships-london-2017-7093740/men/100-metres/final/result",
-    "https://worldathletics.org/results/iaaf-world-championships-in-athletics/2015/15th-iaaf-world-championships-7078726/men/100-metres/final/result",
-    "https://worldathletics.org/results/world-athletics-championships/2013/14th-iaaf-world-championships-7003368/men/100-metres/final/result",
-    "https://worldathletics.org/results/olympic-games/2012/the-xxx-olympic-games-6999193/men/100-metres/final/result",
-    "https://worldathletics.org/results/world-athletics-championships/2011/13th-iaaf-world-championships-in-athletics-7003367/men/100-metres/final/result",
-]
 
 
 def scrape_url_list(urls, label=""):
@@ -42,15 +30,21 @@ def main():
     print("=== Scraping championship/Olympic finals ===")
     championship_df = scrape_url_list(CHAMPIONSHIP_URLS)
 
-    print("\n=== Discovering Diamond League meeting URLs ===")
-    meeting_links = get_diamond_league_meeting_links()
-    print(f"Found {len(meeting_links)} meeting links")
+    print("\n=== Discovering Diamond League meeting URLs (2016-2021) ===")
+    meeting_links = []
+    for year in range(2016, 2022):
+        year_links = get_diamond_league_meeting_links(year=year)
+        print(f"  {year}: {len(year_links)} meetings")
+        meeting_links.extend(year_links)
+    meeting_links = list(dict.fromkeys(meeting_links))
+    print(f"Total unique meetings: {len(meeting_links)}")
 
-    dl_race_urls = []
+
+    dl_race_urls = list(MANUAL_DIAMOND_LEAGUE_URLS)
     for meeting_url in meeting_links:
         try:
             race_url = get_mens_100m_url(meeting_url)
-            if race_url:
+            if race_url and race_url not in dl_race_urls:
                 dl_race_urls.append(race_url)
         except Exception as e:
             print(f"FAILED meeting lookup: {meeting_url} — {e}")
