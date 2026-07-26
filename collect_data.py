@@ -31,27 +31,34 @@ def main():
     championship_df = scrape_url_list(CHAMPIONSHIP_URLS)
 
     print("\n=== Discovering Diamond League meeting URLs (2016-2021) ===")
-    meeting_links = []
+    meetings = []
     for year in range(2016, 2022):
-        year_links = get_diamond_league_meeting_links(year=year)
-        print(f"  {year}: {len(year_links)} meetings")
-        meeting_links.extend(year_links)
-    meeting_links = list(dict.fromkeys(meeting_links))
-    print(f"Total unique meetings: {len(meeting_links)}")
+        year_meetings = get_diamond_league_meeting_links(year=year)
+        print(f"  {year}: {len(year_meetings)} meetings")
+        meetings.extend(year_meetings)
+    meetings = list(dict(meetings).items())  # dedupe by URL
+    print(f"Total unique meetings: {len(meetings)}")
 
-
-    dl_race_urls = list(MANUAL_DIAMOND_LEAGUE_URLS)
-    for meeting_url in meeting_links:
+    dl_race_urls_with_venue = []
+    for meeting_url, venue in meetings:
         try:
             race_url = get_mens_100m_url(meeting_url)
-            if race_url and race_url not in dl_race_urls:
-                dl_race_urls.append(race_url)
+            if race_url:
+                dl_race_urls_with_venue.append((race_url, venue))
         except Exception as e:
             print(f"FAILED meeting lookup: {meeting_url} — {e}")
 
-    print(f"\n=== Scraping {len(dl_race_urls)} Diamond League finals ===")
-    dl_df = scrape_url_list(dl_race_urls)
-
+    print(f"\n=== Scraping {len(dl_race_urls_with_venue)} Diamond League finals ===")
+    all_races = []
+    for u, venue in dl_race_urls_with_venue:
+        try:
+            race = scrape_race(u, known_venue=venue)
+            all_races.append(race)
+            print(f"OK ({len(race)} rows): {u}")
+        except Exception as e:
+            print(f"FAILED: {u}")
+            print(f"   error: {e}")
+    dl_df = pd.concat(all_races, ignore_index=True) if all_races else pd.DataFrame()
     print("\n=== Expanding to semi-finals/heats ===")
     all_final_urls = CHAMPIONSHIP_URLS + dl_race_urls
     expanded_urls = []

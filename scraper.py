@@ -31,15 +31,13 @@ def clean_mark(mark):
     return time, flag
 
 
-def scrape_race(url):
-    """Scrape a single World Athletics results page into a clean DataFrame."""
+def scrape_race(url, known_venue=None):
     resp = requests.get(url, headers=HEADERS, timeout=15)
     resp.raise_for_status()
 
     tables = pd.read_html(StringIO(resp.text))
     results_table = max(tables, key=len)
 
-    # Normalize column names across inconsistent page formats
     results_table.columns = [str(c).strip() for c in results_table.columns]
     rename_map = {"Mark": "MARK", "Athlete": "ATHLETE", "Unnamed: 2": "COUNTRY"}
     results_table = results_table.rename(columns=rename_map)
@@ -50,7 +48,6 @@ def scrape_race(url):
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    # wind
     heading = soup.find(string=lambda s: s and "Wind" in s)
     wind = None
     if heading:
@@ -58,25 +55,25 @@ def scrape_race(url):
         if match:
             wind = float(match.group(1))
 
-    # date — from EventDate meta tag
     date = None
     for meta in soup.find_all("meta"):
         if meta.get("name") == "EventDate" or meta.get("property") == "EventDate":
             date = meta.get("content")
             break
 
-    # venue + meet name
-    desc_tag = soup.find("meta", attrs={"property": "og:description"})
-    venue = None
-    if desc_tag and desc_tag.get("content"):
-        venue_match = re.search(r"in\s+([A-Za-z\s]+)$", desc_tag["content"].strip())
-        if venue_match:
-            venue = venue_match.group(1).strip()
+    # Use the known venue (from the meeting index) if we have it — more
+    # reliable than the regex-from-description fallback.
+    venue = known_venue
+    if not venue:
+        desc_tag = soup.find("meta", attrs={"property": "og:description"})
+        if desc_tag and desc_tag.get("content"):
+            venue_match = re.search(r"in\s+([A-Za-z\s]+)$", desc_tag["content"].strip())
+            if venue_match:
+                venue = venue_match.group(1).strip()
 
     title_tag = soup.find("meta", attrs={"property": "og:title"})
     meet_name = title_tag["content"].strip() if title_tag and title_tag.get("content") else None
 
-    # round (final/semi-final/heats) — extracted from the URL path
     round_type = "final"
     if "/semi-final/" in url:
         round_type = "semi-final"
@@ -92,8 +89,6 @@ def scrape_race(url):
 
     return results_table[["ATHLETE", "COUNTRY", "time", "record_flag", "Reaction Time",
                             "wind", "date", "venue", "meet_name", "source_url", "round"]]
-
-
 def get_mens_100m_url(meeting_url):
     """Given a Diamond League meeting page URL, find its men's 100m final result URL."""
     resp = requests.get(meeting_url, headers=HEADERS, timeout=15)
@@ -112,9 +107,8 @@ def get_mens_100m_url(meeting_url):
 
 
 def get_diamond_league_meeting_links(year=None):
-    """Scrape the Diamond League meetings index page for meeting URLs.
-    If year is given (2016-2021 confirmed working), fetches that specific year.
-    If year is None, fetches whatever the default page shows (2019-2021)."""
+    """Scrape the Diamond League meetings index page for meeting URLs and venues.
+    Returns a list of (url, venue) tuples."""
     url = "https://worldathletics.org/results/diamond-league-meetings"
     if year:
         url += f"?year={year}"
@@ -123,16 +117,23 @@ def get_diamond_league_meeting_links(year=None):
     resp.raise_for_status()
 
     soup = BeautifulSoup(resp.text, "html.parser")
-    links = soup.find_all("a", href=True)
+    rows = soup.find_all("tr")
 
-    meeting_links = [
-        a["href"] for a in links
-        if a["href"].startswith("/results/diamond-league-meetings/")
-    ]
-    meeting_links = ["https://worldathletics.org" + link for link in meeting_links]
-    meeting_links = list(dict.fromkeys(meeting_links))
+    meetings = []
+    for row in rows:
+        link_tag = row.find("a", href=True)
+        if not link_tag or not link_tag["href"].startswith("/results/diamond-league-meetings/"):
+            continue
+        cells = row.find_all("td")
+        venue = cells[1].get_text(strip=True) if len(cells) > 1 else None
+        meetings.append(("https://worldathletics.org" + link_tag["href"], venue))
 
-    return meeting_links
+    # dedupe by URL, keep first venue seen
+    seen = {}
+    for u, v in meetings:
+        if u not in seen:
+            seen[u] = v
+    return list(seen.items())
 
 
 def generate_round_variants(final_url):

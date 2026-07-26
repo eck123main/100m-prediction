@@ -10,10 +10,23 @@ HALF_LIFE_DAYS = 365 * 2  # a race's weight halves every ~2 years
 
 
 def load_clean_data(csv_path="100m_races_dataset.csv"):
-    """Load the dataset and clean names/dates so grouping by athlete works correctly."""
+    """Load the dataset and clean names/dates/round so grouping works correctly."""
     df = pd.read_csv(csv_path)
     df["ATHLETE"] = df["ATHLETE"].str.strip().str.title()
     df["date"] = pd.to_datetime(df["date"], format="%d/%m/%Y %H:%M:%S", errors="coerce")
+
+    # Derive round from the URL itself instead of trusting the stored column,
+    # since older scrapes (before the round column existed) left it as NaN.
+    def infer_round(url):
+        if "/semi-final/" in url:
+            return "semi-final"
+        elif "/heats/" in url:
+            return "heats"
+        else:
+            return "final"
+
+    df["round"] = df["source_url"].apply(infer_round)
+
     return df
 
 
