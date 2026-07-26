@@ -4,18 +4,22 @@ Run this file directly to (re)build 100m_races_dataset.csv from scratch:
 """
 
 import pandas as pd
-from scraper import scrape_race, get_mens_100m_url, get_diamond_league_meeting_links, generate_round_variants
+from scraper import (
+    scrape_race, scrape_hub_race, get_mens_100m_url,
+    get_diamond_league_meeting_links, generate_round_variants
+)
 from links import CHAMPIONSHIP_URLS, DIAMOND_LEAGUE_HUB_URLS, MANUAL_DIAMOND_LEAGUE_URLS
 
 CSV_PATH = "100m_races_dataset.csv"
 
 
-def scrape_url_list(urls, label=""):
-    """Scrape a list of URLs with scrape_race(), printing progress. Returns a combined DataFrame."""
+def scrape_url_list(urls, scrape_fn=scrape_race):
+    """Scrape a list of URLs with the given scrape function, printing progress.
+    Returns a combined DataFrame."""
     all_races = []
     for u in urls:
         try:
-            race = scrape_race(u)
+            race = scrape_fn(u)
             all_races.append(race)
             print(f"OK ({len(race)} rows): {u}")
         except Exception as e:
@@ -48,7 +52,7 @@ def main():
         except Exception as e:
             print(f"FAILED meeting lookup: {meeting_url} — {e}")
 
-    print(f"\n=== Scraping {len(dl_race_urls_with_venue)} Diamond League finals ===")
+    print(f"\n=== Scraping {len(dl_race_urls_with_venue)} Diamond League finals (2016-2021) ===")
     all_races = []
     for u, venue in dl_race_urls_with_venue:
         try:
@@ -59,6 +63,7 @@ def main():
             print(f"FAILED: {u}")
             print(f"   error: {e}")
     dl_df = pd.concat(all_races, ignore_index=True) if all_races else pd.DataFrame()
+
     print("\n=== Expanding to semi-finals/heats ===")
     dl_race_urls_only = [u for u, venue in dl_race_urls_with_venue]
     all_final_urls = CHAMPIONSHIP_URLS + dl_race_urls_only
@@ -66,10 +71,13 @@ def main():
     for url in all_final_urls:
         expanded_urls.extend(generate_round_variants(url))
     print(f"Generated {len(expanded_urls)} semi-final/heats URLs to try")
+    rounds_df = scrape_url_list(expanded_urls, scrape_fn=scrape_race)
 
-    rounds_df = scrape_url_list(expanded_urls)
-    print(f"\n=== Scraping {len(DIAMOND_LEAGUE_HUB_URLS)} hub-format Diamond League races ===")
-    hub_df = scrape_url_list(DIAMOND_LEAGUE_HUB_URLS)
+    print(f"\n=== Scraping {len(DIAMOND_LEAGUE_HUB_URLS)} hub-format Diamond League races (2022-2026) ===")
+    hub_df = scrape_url_list(DIAMOND_LEAGUE_HUB_URLS, scrape_fn=scrape_hub_race)
+
+    print(f"\n=== Scraping {len(MANUAL_DIAMOND_LEAGUE_URLS)} manually added Diamond League races ===")
+    manual_df = scrape_url_list(MANUAL_DIAMOND_LEAGUE_URLS, scrape_fn=scrape_race)
 
     print("\n=== Merging and saving ===")
     try:
@@ -77,7 +85,10 @@ def main():
     except FileNotFoundError:
         existing = pd.DataFrame()
 
-    combined = pd.concat([existing, championship_df, dl_df, rounds_df], ignore_index=True)
+    combined = pd.concat(
+        [existing, championship_df, dl_df, rounds_df, hub_df, manual_df],
+        ignore_index=True
+    )
     combined = combined.drop_duplicates()
     combined.to_csv(CSV_PATH, index=False)
     print(f"Saved {len(combined)} total rows to {CSV_PATH}")
