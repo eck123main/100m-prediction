@@ -31,61 +31,57 @@ def clean_mark(mark):
     return time, flag
 
 
-def scrape_race(url, known_venue=None):
+def scrape_hub_race(url):
+    """Scrape a men's 100m result from a Diamond League 'hub' page —
+    a calendar-results/{id}/result page that embeds every event's
+    results on one page, rather than linking to separate per-event pages."""
     resp = requests.get(url, headers=HEADERS, timeout=15)
     resp.raise_for_status()
 
-    tables = pd.read_html(StringIO(resp.text))
-    results_table = max(tables, key=len)
+    soup = BeautifulSoup(resp.text, "html.parser")
 
+    # Find the "Men's 100 Metres" heading, then the FIRST table that
+    # appears after it (that's this event's results table)
+    heading = soup.find(string=lambda s: s and "Men's 100 Metres" in s)
+    if not heading:
+        raise ValueError("No Men's 100 Metres section found on this page")
+
+    # Walk forward through the page from that heading until we hit a table
+    table_tag = heading.find_next("table")
+    if table_tag is None:
+        raise ValueError("Found 'Men's 100 Metres' heading but no table after it")
+
+    results_table = pd.read_html(StringIO(str(table_tag)))[0]
     results_table.columns = [str(c).strip() for c in results_table.columns]
-    rename_map = {"Mark": "MARK", "Athlete": "ATHLETE", "Unnamed: 2": "COUNTRY"}
+    rename_map = {"Mark": "MARK", "Athlete": "ATHLETE", "Pos.": "POS"}
     results_table = results_table.rename(columns=rename_map)
+
+    # Country isn't a labeled column here — it's a separate cell before
+    # athlete name in this format. Handle gracefully if missing.
+    if "COUNTRY" not in results_table.columns:
+        results_table["COUNTRY"] = None
+
+    if "MARK" not in results_table.columns:
+        raise ValueError("Table found but no MARK column — wrong table matched")
 
     results_table[["time", "record_flag"]] = results_table["MARK"].apply(
         lambda m: pd.Series(clean_mark(m))
     )
 
-    soup = BeautifulSoup(resp.text, "html.parser")
-
-    heading = soup.find(string=lambda s: s and "Wind" in s)
+    # Wind — look for text near the "Men's 100 Metres" heading specifically
     wind = None
-    if heading:
-        match = re.search(r"Wind\s*([+-]?\d+\.\d+)", heading)
+    wind_text = heading.find_next(string=lambda s: s and "Wind" in s)
+    if wind_text:
+        match = re.search(r"Wind:\s*([+-]?\d+\.\d+)", wind_text)
         if match:
             wind = float(match.group(1))
 
-    date = None
-    for meta in soup.find_all("meta"):
-        if meta.get("name") == "EventDate" or meta.get("property") == "EventDate":
-            date = meta.get("content")
-            break
-
-    # Use the known venue (from the meeting index) if we have it — more
-    # reliable than the regex-from-description fallback.
-    venue = known_venue
-    if not venue:
-        desc_tag = soup.find("meta", attrs={"property": "og:description"})
-        if desc_tag and desc_tag.get("content"):
-            venue_match = re.search(r"in\s+([A-Za-z\s]+)$", desc_tag["content"].strip())
-            if venue_match:
-                venue = venue_match.group(1).strip()
-
-    title_tag = soup.find("meta", attrs={"property": "og:title"})
-    meet_name = title_tag["content"].strip() if title_tag and title_tag.get("content") else None
-
-    round_type = "final"
-    if "/semi-final/" in url:
-        round_type = "semi-final"
-    elif "/heats/" in url:
-        round_type = "heats"
-
     results_table["wind"] = wind
-    results_table["date"] = date
-    results_table["venue"] = venue
-    results_table["meet_name"] = meet_name
+    results_table["date"] = None   # not reliably extractable from this format yet
+    results_table["venue"] = None
+    results_table["meet_name"] = soup.title.string if soup.title else None
     results_table["source_url"] = url
-    results_table["round"] = round_type
+    results_table["round"] = "final"
 
     return results_table[["ATHLETE", "COUNTRY", "time", "record_flag", "Reaction Time",
                             "wind", "date", "venue", "meet_name", "source_url", "round"]]

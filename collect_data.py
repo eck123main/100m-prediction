@@ -5,7 +5,7 @@ Run this file directly to (re)build 100m_races_dataset.csv from scratch:
 
 import pandas as pd
 from scraper import scrape_race, get_mens_100m_url, get_diamond_league_meeting_links, generate_round_variants
-from links import CHAMPIONSHIP_URLS, MANUAL_DIAMOND_LEAGUE_URLS
+from links import CHAMPIONSHIP_URLS, DIAMOND_LEAGUE_HUB_URLS, MANUAL_DIAMOND_LEAGUE_URLS
 
 CSV_PATH = "100m_races_dataset.csv"
 
@@ -60,13 +60,16 @@ def main():
             print(f"   error: {e}")
     dl_df = pd.concat(all_races, ignore_index=True) if all_races else pd.DataFrame()
     print("\n=== Expanding to semi-finals/heats ===")
-    all_final_urls = CHAMPIONSHIP_URLS + dl_race_urls
+    dl_race_urls_only = [u for u, venue in dl_race_urls_with_venue]
+    all_final_urls = CHAMPIONSHIP_URLS + dl_race_urls_only
     expanded_urls = []
     for url in all_final_urls:
         expanded_urls.extend(generate_round_variants(url))
     print(f"Generated {len(expanded_urls)} semi-final/heats URLs to try")
 
     rounds_df = scrape_url_list(expanded_urls)
+    print(f"\n=== Scraping {len(DIAMOND_LEAGUE_HUB_URLS)} hub-format Diamond League races ===")
+    hub_df = scrape_url_list(DIAMOND_LEAGUE_HUB_URLS)
 
     print("\n=== Merging and saving ===")
     try:

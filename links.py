@@ -18,6 +18,27 @@ CHAMPIONSHIP_URLS = [
     # Add new championship/Olympic URLs below this line:
 ]
 
+# 2022-2026 Diamond League meetings — found manually by clicking through
+# in browser (the "calendar-results/{id}/result" hub format). Each page
+# contains ALL events for that meeting, including Men's 100m.
+DIAMOND_LEAGUE_HUB_URLS = [
+    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214016/result",  # Shaoxing/Keqiao 2026
+    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214017/result",
+    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214018/result",  
+    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214019/result",  # Shaoxing/Keqiao 2026
+        "https://worldathletics.org/competitions/diamond-league/calendar-results/7214020/result",
+        "https://worldathletics.org/competitions/diamond-league/calendar-results/7214021/result",
+        "https://worldathletics.org/competitions/diamond-league/calendar-results/7214022/result",  # Shaoxing/Keqiao 2026
+            "https://worldathletics.org/competitions/diamond-league/calendar-results/7214023/result",
+            "https://worldathletics.org/competitions/diamond-league/calendar-results/7214024/result"
+                "https://worldathletics.org/competitions/diamond-league/calendar-results/7214025/result",
+        
+    
+
+    # Add more here as you find them — one per meeting, any year 2022-2026
+]
+
+
 # Diamond League URLs are discovered automatically by scraper.get_diamond_league_meeting_links()
 # and don't need to be listed here manually. But if you find one that isn't
 # auto-discoverable (e.g. from a year the index page doesn't expose), add it here:
