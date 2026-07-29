@@ -77,11 +77,11 @@ def scrape_race(url, known_venue=None):
         round_type = "heats"
 
     results_table["wind"] = wind
-    results_table["date"] = None
-    results_table["venue"] = None
-    results_table["meet_name"] = soup.title.string if soup.title else None
+    results_table["date"] = date
+    results_table["venue"] = venue
+    results_table["meet_name"] = meet_name if meet_name else (soup.title.string if soup.title else None)
     results_table["source_url"] = url
-    results_table["round"] = "final"
+    results_table["round"] = round_type
 
     # This page format doesn't always include Reaction Time — add it as
     # empty if missing, so column selection below doesn't crash
@@ -127,6 +127,9 @@ def scrape_hub_race(url):
     results_table[["time", "record_flag"]] = results_table["MARK"].apply(
         lambda m: pd.Series(clean_mark(m))
     )
+
+    if "Reaction Time" not in results_table.columns:
+        results_table["Reaction Time"] = None
 
     # Wind — look for text near the "Men's 100 Metres" heading specifically
     wind = None
