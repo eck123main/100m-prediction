@@ -15,6 +15,31 @@ CHAMPIONSHIP_URLS = [
     "https://worldathletics.org/results/olympic-games/2012/the-xxx-olympic-games-6999193/men/100-metres/final/result",  # London 2012
     "https://worldathletics.org/results/world-athletics-championships/2011/13th-iaaf-world-championships-in-athletics-7003367/men/100-metres/final/result",  # Daegu 2011
 
+    # Added: gaps found by cross-referencing worldathletics.org's calendar-results
+    # API (competitionGroupId=6 for Worlds, =5 for Olympics) against the URLs above.
+    # Note: the slug text in these URLs is cosmetic — worldathletics.org resolves
+    # purely off the trailing numeric ID, confirmed by requesting these same IDs
+    # with garbage slugs and getting identical 200 responses.
+    "https://worldathletics.org/results/world-athletics-championships/2025/world-athletics-championships-tokyo-2025-7190593/men/100-metres/final/result",  # Tokyo 2025
+    "https://worldathletics.org/results/olympic-games/2016/the-xxxi-olympic-games-7093747/men/100-metres/final/result",  # Rio 2016
+    "https://worldathletics.org/results/olympic-games/2008/the-xxix-olympic-games-6977748/men/100-metres/final/result",  # Beijing 2008
+    "https://worldathletics.org/results/olympic-games/2004/the-xxviii-olympic-games-6913163/men/100-metres/final/result",  # Athens 2004
+    "https://worldathletics.org/results/olympic-games/2000/the-xxvii-olympic-games-6951910/men/100-metres/final/result",  # Sydney 2000
+    # 1996 Atlanta Olympics: this ID (6961749) 404s on the modern results path —
+    # not migrated to this URL scheme. Skipped rather than guessing further.
+    "https://worldathletics.org/results/world-athletics-championships/2009/iaaf-world-championships-berlin-2009-6998524/men/100-metres/final/result",  # Berlin 2009
+    "https://worldathletics.org/results/world-athletics-championships/2007/iaaf-world-championships-osaka-2007-6903480/men/100-metres/final/result",  # Osaka 2007
+    "https://worldathletics.org/results/world-athletics-championships/2005/iaaf-world-championships-helsinki-2005-6937596/men/100-metres/final/result",  # Helsinki 2005
+    "https://worldathletics.org/results/world-athletics-championships/2003/iaaf-world-championships-paris-2003-6930156/men/100-metres/final/result",  # Paris/Saint-Denis 2003
+    "https://worldathletics.org/results/world-athletics-championships/2001/iaaf-world-championships-edmonton-2001-6947294/men/100-metres/final/result",  # Edmonton 2001
+    "https://worldathletics.org/results/world-athletics-championships/1999/iaaf-world-championships-seville-1999-6939522/men/100-metres/final/result",  # Seville 1999
+    "https://worldathletics.org/results/world-athletics-championships/1997/iaaf-world-championships-athens-1997-6913256/men/100-metres/final/result",  # Athens 1997
+    "https://worldathletics.org/results/world-athletics-championships/1995/iaaf-world-championships-gothenburg-1995-6997728/men/100-metres/final/result",  # Gothenburg 1995
+    "https://worldathletics.org/results/world-athletics-championships/1993/iaaf-world-championships-stuttgart-1993-6993598/men/100-metres/final/result",  # Stuttgart 1993
+    "https://worldathletics.org/results/world-athletics-championships/1991/iaaf-world-championships-tokyo-1991-6987209/men/100-metres/final/result",  # Tokyo 1991
+    "https://worldathletics.org/results/world-athletics-championships/1987/iaaf-world-championships-rome-1987-6986221/men/100-metres/final/result",  # Rome 1987
+    "https://worldathletics.org/results/world-athletics-championships/1983/iaaf-world-championships-helsinki-1983-6988504/men/100-metres/final/result",  # Helsinki 1983
+
     # Add new championship/Olympic URLs below this line:
 ]
 
@@ -93,6 +118,13 @@ DIAMOND_LEAGUE_HUB_URLS = [
     "https://worldathletics.org/competitions/diamond-league/calendar-results/7153972/result",
     "https://worldathletics.org/competitions/diamond-league/calendar-results/7153974/result",
     "https://worldathletics.org/competitions/diamond-league/calendar-results/7153975/result",
+
+    # Found via calendar-results discovery (competitionGroupId=627) — gaps versus the list above:
+    "https://worldathletics.org/competitions/diamond-league/calendar-results/7153971/result",  # Herculis Monaco 2022
+    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174055/result",  # Prefontaine Classic 2024
+    "https://worldathletics.org/competitions/diamond-league/calendar-results/7203937/result",  # Bauhaus-Galan 2025
+    "https://worldathletics.org/competitions/diamond-league/calendar-results/7203942/result",  # Herculis Monaco 2025
+    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214015/result",  # Doha Meeting 2026
 
     # Add more here as you find them — one per meeting, any year 2022-2026
 ]
