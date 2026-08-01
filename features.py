@@ -30,6 +30,28 @@ def load_clean_data(csv_path="100m_races_dataset.csv"):
     return df
 
 
+def compute_reliability_before(cutoff_date, df, prior_strength=8):
+    """Per-athlete rate of producing a valid time (i.e. not a DNF/DQ/DNS), using
+    only races strictly before cutoff_date. Shrunk toward the field-wide average
+    via a Beta prior (worth prior_strength races) so an athlete with only 1-2
+    starts doesn't get scored as a false 0% or 100% reliable."""
+    history = df[df["date"] < cutoff_date]
+    if len(history) == 0:
+        return pd.DataFrame(columns=["starts", "finishes", "finish_rate"])
+
+    prior_rate = history["time"].notna().mean()
+    alpha0 = prior_rate * prior_strength
+    beta0 = (1 - prior_rate) * prior_strength
+
+    def reliability(group):
+        starts = len(group)
+        finishes = group["time"].notna().sum()
+        finish_rate = (finishes + alpha0) / (starts + alpha0 + beta0)
+        return pd.Series({"starts": starts, "finishes": finishes, "finish_rate": finish_rate})
+
+    return history.groupby("ATHLETE").apply(reliability, include_groups=False)
+
+
 def compute_stats_before(cutoff_date, df):
     """Recency-weighted stats using only races strictly before cutoff_date.
     Prevents leaking a target race's own result into an athlete's 'known form'."""
@@ -51,7 +73,9 @@ def compute_stats_before(cutoff_date, df):
             "consistency": consistency
         })
 
-    return history.groupby("ATHLETE").apply(recency_weighted_avg, include_groups=False)
+    stats = history.groupby("ATHLETE").apply(recency_weighted_avg, include_groups=False)
+    reliability = compute_reliability_before(cutoff_date, df)
+    return stats.join(reliability[["finish_rate", "starts", "finishes"]])
 
 
 def compute_all_time_stats(df):
