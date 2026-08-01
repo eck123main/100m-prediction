@@ -15,6 +15,16 @@ HALF_LIFE_DAYS = 365 * 2  # a race's weight halves every ~2 years
 MIN_PLAUSIBLE_TIME = 9.0
 MAX_PLAUSIBLE_TIME = 13.0
 
+# A single real 100m heat/semi/final has 3-10 lanes; source_urls with more
+# rows than that are mislabeled multi-heat/full-meet dumps, not one race —
+# pairwise-comparing everyone in one of those would credit made-up
+# head-to-head results between people who never actually raced each other.
+MIN_REAL_RACE_SIZE = 3
+MAX_REAL_RACE_SIZE = 10
+
+BASE_ELO = 1500
+ELO_K = 24
+
 
 def load_clean_data(csv_path="100m_races_dataset.csv"):
     """Load the dataset and clean names/dates/round so grouping works correctly."""
@@ -46,7 +56,70 @@ def load_clean_data(csv_path="100m_races_dataset.csv"):
     df["adj_time"] = df["adj_time"] - df["round"].map(round_offsets).fillna(0)
     df.attrs["round_offsets"] = round_offsets
 
+    df.attrs["elo_history"] = compute_elo_history(df)
+
     return df
+
+
+def get_real_races(df):
+    """Rows belonging to a single genuine race (plausible field size), across
+    all rounds — filters out mislabeled multi-heat/full-meet dumps."""
+    sizes = df.groupby("source_url").size()
+    real_ids = sizes[(sizes >= MIN_REAL_RACE_SIZE) & (sizes <= MAX_REAL_RACE_SIZE)].index
+    return df[df["source_url"].isin(real_ids)]
+
+
+def compute_elo_history(df):
+    """Replay every real race in chronological order, updating Elo ratings
+    via pairwise 'who finished ahead of whom' comparisons — this is the
+    head-to-head / field-relative signal, as opposed to each athlete's solo
+    average time. A race with n finishers decomposes into every pairwise
+    comparison; each athlete's rating change is the average surprise across
+    their n-1 comparisons that race, scaled by ELO_K.
+
+    Returns one row per (ATHLETE, date, elo) — the athlete's rating right
+    after that race. Look up a leak-free rating as of any cutoff via
+    compute_elo_before, which takes the most recent row strictly before it."""
+    races = get_real_races(df).dropna(subset=["time", "date"]).sort_values("date")
+
+    ratings = {}
+    rows = []
+
+    for source_url, race in races.groupby("source_url", sort=False):
+        race = race.sort_values("time")
+        athletes = race["ATHLETE"].tolist()
+        if len(athletes) < 2:
+            continue
+        date = race["date"].iloc[0]
+
+        current = {a: ratings.get(a, BASE_ELO) for a in athletes}
+        delta = {a: 0.0 for a in athletes}
+        n = len(athletes)
+
+        for i in range(n):
+            for j in range(i + 1, n):
+                faster, slower = athletes[i], athletes[j]
+                expected_faster = 1 / (1 + 10 ** ((current[slower] - current[faster]) / 400))
+                surprise = 1 - expected_faster  # actual result (faster won) minus expectation
+                delta[faster] += surprise
+                delta[slower] -= surprise
+
+        for a in athletes:
+            ratings[a] = current[a] + ELO_K * delta[a] / (n - 1)
+            rows.append({"ATHLETE": a, "date": date, "elo": ratings[a]})
+
+    return pd.DataFrame(rows, columns=["ATHLETE", "date", "elo"])
+
+
+def compute_elo_before(cutoff_date, elo_history):
+    """Each athlete's most recent Elo rating from a real race strictly before
+    cutoff_date. Athletes with no prior rated race aren't included here —
+    callers should default them to BASE_ELO (an unknown quantity, not a weak
+    one)."""
+    history = elo_history[elo_history["date"] < cutoff_date]
+    if len(history) == 0:
+        return pd.Series(dtype=float, name="elo")
+    return history.sort_values("date").groupby("ATHLETE")["elo"].last()
 
 
 def estimate_wind_coefficient(df, min_races=3, min_wind_std=0.3):
@@ -134,7 +207,7 @@ def compute_stats_before(cutoff_date, df):
     history = df[df["date"] < cutoff_date]
     if len(history) == 0:
         return pd.DataFrame(columns=["weighted_avg_time", "races_used", "consistency",
-                                      "finish_rate", "starts", "finishes"])
+                                      "finish_rate", "starts", "finishes", "elo"])
 
     def recency_weighted_avg(group):
         valid = group.dropna(subset=["adj_time", "date"])
@@ -154,7 +227,12 @@ def compute_stats_before(cutoff_date, df):
 
     stats = history.groupby("ATHLETE").apply(recency_weighted_avg, include_groups=False)
     reliability = compute_reliability_before(cutoff_date, df)
-    return stats.join(reliability[["finish_rate", "starts", "finishes"]])
+    stats = stats.join(reliability[["finish_rate", "starts", "finishes"]])
+
+    elo = compute_elo_before(cutoff_date, df.attrs["elo_history"])
+    stats["elo"] = elo.reindex(stats.index).fillna(BASE_ELO)
+
+    return stats
 
 
 def compute_all_time_stats(df):
