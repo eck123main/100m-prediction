@@ -3,8 +3,16 @@ Prediction functions: rank a field by recency-weighted time (baseline),
 or simulate the race with Monte Carlo to get win probabilities.
 """
 
+import sys
+
 import pandas as pd
 import numpy as np
+
+# Windows consoles default to cp1252, which can't encode every character in
+# athlete names (e.g. accented letters) — force utf-8 so warning prints don't
+# crash instead of just printing a name.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
 def predict_race(athlete_names, stats_table):
