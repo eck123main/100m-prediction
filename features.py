@@ -27,7 +27,42 @@ def load_clean_data(csv_path="100m_races_dataset.csv"):
 
     df["round"] = df["source_url"].apply(infer_round)
 
+    coefficient = estimate_wind_coefficient(df)
+    df["adj_time"] = df["time"] - coefficient * df["wind"]
+    df["adj_time"] = df["adj_time"].fillna(df["time"])
+    df.attrs["wind_coefficient"] = coefficient
+
     return df
+
+
+def estimate_wind_coefficient(df, min_races=3, min_wind_std=0.3):
+    """Seconds of time per 1 m/s of wind, estimated as a within-athlete
+    fixed-effects regression: compares each athlete only against their own
+    times across their own varying wind conditions, so a fast athlete who
+    happens to race in windier conditions than a slow athlete doesn't get
+    mistaken for a wind effect. Uses the whole dataset regardless of any
+    backtest cutoff — this is a shared physical relationship (wind's effect
+    on sprint time), not information about who wins a specific future race.
+
+    Only athletes with min_races+ races and real variation in the wind
+    they've faced (min_wind_std) contribute, since an athlete who has only
+    ever raced in +0.5 conditions can't tell us anything about the slope."""
+    valid = df.dropna(subset=["time", "wind"])
+    counts = valid.groupby("ATHLETE").size()
+    wind_std = valid.groupby("ATHLETE")["wind"].std()
+    eligible = counts[(counts >= min_races) & (wind_std.reindex(counts.index).fillna(0) >= min_wind_std)].index
+    valid = valid[valid["ATHLETE"].isin(eligible)]
+
+    if len(valid) == 0:
+        return 0.0
+
+    dt = valid["time"] - valid.groupby("ATHLETE")["time"].transform("mean")
+    dw = valid["wind"] - valid.groupby("ATHLETE")["wind"].transform("mean")
+
+    denom = (dw ** 2).sum()
+    if denom == 0:
+        return 0.0
+    return (dt * dw).sum() / denom
 
 
 def compute_reliability_before(cutoff_date, df, prior_strength=8):
@@ -58,14 +93,14 @@ def compute_stats_before(cutoff_date, df):
     history = df[df["date"] < cutoff_date]
 
     def recency_weighted_avg(group):
-        valid = group.dropna(subset=["time", "date"])
+        valid = group.dropna(subset=["adj_time", "date"])
         if len(valid) == 0:
             return pd.Series({"weighted_avg_time": np.nan, "races_used": 0, "consistency": np.nan})
 
         days_ago = (cutoff_date - valid["date"]).dt.days
         weights = 0.5 ** (days_ago / HALF_LIFE_DAYS)
-        weighted_avg = (valid["time"] * weights).sum() / weights.sum()
-        consistency = valid["time"].std()
+        weighted_avg = (valid["adj_time"] * weights).sum() / weights.sum()
+        consistency = valid["adj_time"].std()
 
         return pd.Series({
             "weighted_avg_time": weighted_avg,
