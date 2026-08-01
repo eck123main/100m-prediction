@@ -66,3 +66,44 @@ def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1):
 
     win_probs = pd.Series(wins) / n_simulations
     return win_probs.sort_values(ascending=False)
+
+
+def elo_win_probs(athlete_names, stats_table):
+    """Win probabilities from head-to-head Elo rating alone (ignores time/
+    consistency/reliability entirely) — the Bradley-Terry extension of the
+    pairwise Elo formula: p_i proportional to 10^(elo_i/400). An athlete with
+    no rating history still gets a rating (BASE_ELO, via compute_stats_before),
+    so this never excludes anyone in the field the way simulate_race can."""
+    field = stats_table.loc[stats_table.index.intersection(athlete_names)]
+
+    missing = set(athlete_names) - set(field.index)
+    if missing:
+        print(f"Warning: no usable data for {missing} — excluded from prediction")
+
+    strength = 10 ** (field["elo"] / 400)
+    return (strength / strength.sum()).sort_values(ascending=False)
+
+
+def blend_win_probs(mc_probs, elo_probs, elo_weight=0.5):
+    """Combine the time-based Monte Carlo probabilities with the head-to-head
+    Elo probabilities. Reindexed to their union since simulate_race can
+    exclude athletes (missing time data, below min_races) that elo_win_probs
+    never does — a missing side contributes 0 rather than dropping the
+    athlete — then renormalized to sum to 1."""
+    idx = mc_probs.index.union(elo_probs.index)
+    mc = mc_probs.reindex(idx).fillna(0)
+    elo = elo_probs.reindex(idx).fillna(0)
+    blended = (1 - elo_weight) * mc + elo_weight * elo
+    return (blended / blended.sum()).sort_values(ascending=False)
+
+
+def predict_race_full(athlete_names, stats_table, n_simulations=10000, min_races=1, elo_weight=0.5):
+    """Recommended prediction: blend the time-based Monte Carlo simulation
+    with head-to-head Elo. elo_weight=0.5 backtested best among {0.3, 0.5,
+    0.7} in backtest.py — Elo alone underperforms the time-based model
+    (weaker standalone signal), but blended in it beats pure Monte Carlo in
+    every slice tested, catching close/uncertain races a solo recency-
+    weighted time average misses."""
+    mc_probs = simulate_race(athlete_names, stats_table, n_simulations=n_simulations, min_races=min_races)
+    elo_probs = elo_win_probs(athlete_names, stats_table)
+    return blend_win_probs(mc_probs, elo_probs, elo_weight=elo_weight)
