@@ -8,12 +8,22 @@ import numpy as np
 
 HALF_LIFE_DAYS = 365 * 2  # a race's weight halves every ~2 years
 
+# Men's 100m world record is 9.58s; even a weak heat qualifier at the
+# competition levels this scraper covers finishes well under 13s. Times
+# outside this band are scraper mismatches (wrong row/column picked up from
+# a results table), not real races — e.g. one row records 45.12s.
+MIN_PLAUSIBLE_TIME = 9.0
+MAX_PLAUSIBLE_TIME = 13.0
+
 
 def load_clean_data(csv_path="100m_races_dataset.csv"):
     """Load the dataset and clean names/dates/round so grouping works correctly."""
     df = pd.read_csv(csv_path)
     df["ATHLETE"] = df["ATHLETE"].str.strip().str.title()
     df["date"] = pd.to_datetime(df["date"], format="%d/%m/%Y %H:%M:%S", errors="coerce")
+
+    implausible = (df["time"] < MIN_PLAUSIBLE_TIME) | (df["time"] > MAX_PLAUSIBLE_TIME)
+    df.loc[implausible, "time"] = np.nan
 
     # Derive round from the URL itself instead of trusting the stored column,
     # since older scrapes (before the round column existed) left it as NaN.
@@ -31,6 +41,10 @@ def load_clean_data(csv_path="100m_races_dataset.csv"):
     df["adj_time"] = df["time"] - coefficient * df["wind"]
     df["adj_time"] = df["adj_time"].fillna(df["time"])
     df.attrs["wind_coefficient"] = coefficient
+
+    round_offsets = estimate_round_offsets(df)
+    df["adj_time"] = df["adj_time"] - df["round"].map(round_offsets).fillna(0)
+    df.attrs["round_offsets"] = round_offsets
 
     return df
 
@@ -63,6 +77,33 @@ def estimate_wind_coefficient(df, min_races=3, min_wind_std=0.3):
     if denom == 0:
         return 0.0
     return (dt * dw).sum() / denom
+
+
+def estimate_round_offsets(df, baseline_round="final", min_races=3):
+    """Seconds each round tends to run slower/faster than an athlete's own
+    final-round pace, estimated the same fixed-effects way as the wind
+    coefficient: only compares an athlete against their own times across
+    rounds, so it isn't confounded by weaker athletes appearing in heats
+    more often than finals. Only athletes with min_races+ races across 2+
+    distinct rounds contribute, since the comparison needs actual variation.
+
+    Returns {round_name: offset_seconds}, where offset is subtracted from
+    adj_time to get a 'final-equivalent' estimate — heats typically comes
+    out positive since athletes often ease off once they've qualified."""
+    valid = df.dropna(subset=["adj_time", "round"])
+    counts = valid.groupby("ATHLETE").size()
+    rounds_per_athlete = valid.groupby("ATHLETE")["round"].nunique()
+    eligible = counts[(counts >= min_races) & (rounds_per_athlete.reindex(counts.index).fillna(0) >= 2)].index
+    valid = valid[valid["ATHLETE"].isin(eligible)]
+
+    if len(valid) == 0:
+        return {baseline_round: 0.0}
+
+    demeaned = valid["adj_time"] - valid.groupby("ATHLETE")["adj_time"].transform("mean")
+    round_effect = demeaned.groupby(valid["round"]).mean()
+
+    baseline = round_effect.get(baseline_round, 0.0)
+    return (round_effect - baseline).to_dict()
 
 
 def compute_reliability_before(cutoff_date, df, prior_strength=8):
