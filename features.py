@@ -132,6 +132,9 @@ def compute_stats_before(cutoff_date, df):
     """Recency-weighted stats using only races strictly before cutoff_date.
     Prevents leaking a target race's own result into an athlete's 'known form'."""
     history = df[df["date"] < cutoff_date]
+    if len(history) == 0:
+        return pd.DataFrame(columns=["weighted_avg_time", "races_used", "consistency",
+                                      "finish_rate", "starts", "finishes"])
 
     def recency_weighted_avg(group):
         valid = group.dropna(subset=["adj_time", "date"])
