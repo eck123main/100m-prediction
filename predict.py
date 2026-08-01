@@ -107,3 +107,33 @@ def predict_race_full(athlete_names, stats_table, n_simulations=10000, min_races
     mc_probs = simulate_race(athlete_names, stats_table, n_simulations=n_simulations, min_races=min_races)
     elo_probs = elo_win_probs(athlete_names, stats_table)
     return blend_win_probs(mc_probs, elo_probs, elo_weight=elo_weight)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print('Usage: python predict.py "Athlete Name" "Athlete Name" ...')
+        sys.exit(1)
+
+    from features import load_clean_data, compute_all_time_stats
+
+    field = [name.strip().title() for name in sys.argv[1:]]
+
+    df = load_clean_data()
+    stats = compute_all_time_stats(df)
+    probs = predict_race_full(field, stats)
+
+    print(f"\n100m final prediction — {len(field)} athletes requested, {len(probs)} matched")
+    print(f"Data through {df['date'].max().date()}\n")
+
+    table = stats.loc[probs.index, ["weighted_avg_time", "finish_rate", "races_used", "elo"]].copy()
+    table.insert(0, "win_prob", probs)
+
+    for rank, (name, row) in enumerate(table.iterrows(), start=1):
+        print(f"  {rank}. {name:<28} {row['win_prob']:>5.1%}   "
+              f"time~{row['weighted_avg_time']:.2f}s   finish_rate={row['finish_rate']:.0%}   "
+              f"races={int(row['races_used'])}   elo={row['elo']:.0f}")
+
+    unmatched = set(field) - set(probs.index)
+    if unmatched:
+        print(f"\nNo usable data for: {sorted(unmatched)} — not included above")
+    print()
