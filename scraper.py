@@ -3,17 +3,83 @@ Core scraping functions: fetch a single race's results, and discover
 race URLs automatically from World Athletics' meeting-index pages.
 """
 
-import requests
-import pandas as pd
-import numpy as np
+import json
+import random
 import re
-from bs4 import BeautifulSoup
+import time
 from io import StringIO
+
+import numpy as np
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 }
+
+RESULT_COLUMNS = ["ATHLETE", "COUNTRY", "time", "record_flag", "Reaction Time",
+                   "wind", "date", "venue", "meet_name", "source_url", "round"]
+
+
+def fetch(url, max_retries=3, backoff_base=1.0, **kwargs):
+    """GET a URL with a small polite delay and retry-with-backoff on failure.
+    Shared by every scraping function so we don't hammer worldathletics.org
+    with hundreds of back-to-back requests."""
+    kwargs.setdefault("headers", HEADERS)
+    kwargs.setdefault("timeout", 15)
+    last_exc = None
+    for attempt in range(max_retries):
+        time.sleep(random.uniform(0.4, 1.0))
+        try:
+            resp = requests.get(url, **kwargs)
+            resp.raise_for_status()
+            return resp
+        except requests.exceptions.HTTPError as e:
+            # 4xx client errors (404, etc.) are permanent — retrying the same
+            # URL won't ever succeed, so fail fast instead of burning backoff.
+            if e.response is not None and 400 <= e.response.status_code < 500:
+                raise
+            last_exc = e
+            if attempt < max_retries - 1:
+                time.sleep(backoff_base * (2 ** attempt))
+        except requests.exceptions.RequestException as e:
+            last_exc = e
+            if attempt < max_retries - 1:
+                time.sleep(backoff_base * (2 ** attempt))
+    raise last_exc
+
+
+def normalize_meet_name(name):
+    """Collapse whitespace runs (including newlines/tabs from page markup)
+    so the same meet doesn't fragment into multiple distinct meet_name values."""
+    if not name:
+        return name
+    return " ".join(str(name).split())
+
+
+def _drop_non_sprint_marks(results_table):
+    """Drop rows whose raw mark looks like a longer-distance time (contains ':',
+    e.g. '1:43.68' for an 800m result) before clean_mark() can mis-parse it into
+    record_flag. Wrong-table matches on multi-event hub pages produce these."""
+    mask = results_table["MARK"].astype(str).str.contains(":", na=False)
+    return results_table.loc[~mask].reset_index(drop=True)
+
+
+def _check_plausible_sprint_times(results_table, low=9.4, high=11.5, min_valid_fraction=0.5):
+    """Raise if most parsed times fall outside a plausible men's 100m range —
+    a cheap defense-in-depth check against wrong-event contamination (e.g. a
+    200m/800m table getting matched instead of the 100m one)."""
+    valid_times = results_table["time"].dropna()
+    if len(valid_times) == 0:
+        return
+    in_range = valid_times.between(low, high).mean()
+    if in_range < min_valid_fraction:
+        raise ValueError(
+            f"only {in_range:.0%} of {len(valid_times)} marks fall in a plausible "
+            f"100m range [{low}, {high}]s — likely wrong event table"
+        )
 
 
 def clean_mark(mark):
@@ -30,8 +96,7 @@ def clean_mark(mark):
         flag = parts[0]  # e.g. 'DNF', 'DQ', 'DNS'
     return time, flag
 def scrape_race(url, known_venue=None):
-    resp = requests.get(url, headers=HEADERS, timeout=15)
-    resp.raise_for_status()
+    resp = fetch(url)
 
     tables = pd.read_html(StringIO(resp.text))
     results_table = max(tables, key=len)
@@ -40,9 +105,11 @@ def scrape_race(url, known_venue=None):
     rename_map = {"Mark": "MARK", "Athlete": "ATHLETE", "Unnamed: 2": "COUNTRY"}
     results_table = results_table.rename(columns=rename_map)
 
+    results_table = _drop_non_sprint_marks(results_table)
     results_table[["time", "record_flag"]] = results_table["MARK"].apply(
         lambda m: pd.Series(clean_mark(m))
     )
+    _check_plausible_sprint_times(results_table)
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
@@ -69,6 +136,9 @@ def scrape_race(url, known_venue=None):
 
     title_tag = soup.find("meta", attrs={"property": "og:title"})
     meet_name = title_tag["content"].strip() if title_tag and title_tag.get("content") else None
+    meet_name = normalize_meet_name(meet_name) if meet_name else (
+        normalize_meet_name(soup.title.string) if soup.title else None
+    )
 
     round_type = "final"
     if "/semi-final/" in url:
@@ -79,7 +149,7 @@ def scrape_race(url, known_venue=None):
     results_table["wind"] = wind
     results_table["date"] = date
     results_table["venue"] = venue
-    results_table["meet_name"] = meet_name if meet_name else (soup.title.string if soup.title else None)
+    results_table["meet_name"] = meet_name
     results_table["source_url"] = url
     results_table["round"] = round_type
 
@@ -88,70 +158,123 @@ def scrape_race(url, known_venue=None):
     if "Reaction Time" not in results_table.columns:
         results_table["Reaction Time"] = None
 
-    return results_table[["ATHLETE", "COUNTRY", "time", "record_flag", "Reaction Time",
-                            "wind", "date", "venue", "meet_name", "source_url", "round"]]
+    return results_table[RESULT_COLUMNS]
+
+def _map_round_label(race_label):
+    """Map a hub-page race label ('Final', 'Heat 1', 'Semi-Final 2', ...) to
+    the same round vocabulary used elsewhere in the dataset."""
+    if not race_label:
+        return "final"
+    label = race_label.lower()
+    if "heat" in label:
+        return "heats"
+    if "semi" in label:
+        return "semi-final"
+    return "final"
+
+
+def _parse_wind(wind_value):
+    try:
+        return float(wind_value)
+    except (TypeError, ValueError):
+        return None
+
+
+    # Tiers that exist alongside the elite field on hub pages but should never
+    # be mistaken for it (national champs pages group heats/combined-events/
+    # underage races under these labels rather than "Diamond Discipline").
+SECONDARY_HUB_TIERS = {"Combined Events", "Qualifier Prelims", "U20 Events", "National Events"}
+
 
 def scrape_hub_race(url):
-    """Scrape a men's 100m result from a Diamond League 'hub' page —
-    a calendar-results/{id}/result page that embeds every event's
-    results on one page, rather than linking to separate per-event pages."""
-    resp = requests.get(url, headers=HEADERS, timeout=15)
-    resp.raise_for_status()
+    """Scrape a men's 100m result from a World Athletics 'hub' page —
+    a calendar-results/{id}(/result) page that embeds every event's results
+    for the whole meeting on one page. Used for Diamond League meetings and
+    for other meetings (national championships, etc.) that share the same
+    underlying page format.
 
+    Rather than parsing the rendered HTML tables (which is ambiguous: a
+    single meeting page can have several sections all headed "Men's 100
+    Metres" — e.g. a National-tier and a U20-tier field alongside, or
+    instead of, the elite one — and naive "next table after this heading"
+    logic can walk into a completely different event's table), this reads
+    the page's embedded __NEXT_DATA__ JSON directly, which explicitly
+    labels each section's tier (e.g. "Diamond Discipline" vs "National
+    Events" vs "U20 Events"). Diamond League pages label the elite tier
+    "Diamond Discipline"; other meetings (e.g. national championships)
+    leave it untitled (eventTitle None) instead, so that's the fallback.
+    """
+    resp = fetch(url)
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    # Find the "Men's 100 Metres" heading, then the FIRST table that
-    # appears after it (that's this event's results table)
-    heading = soup.find(string=lambda s: s and "Men's 100 Metres" in s)
-    if not heading:
-        raise ValueError("No Men's 100 Metres section found on this page")
+    script_tag = soup.find("script", id="__NEXT_DATA__")
+    if script_tag is None or not script_tag.string:
+        raise ValueError("No __NEXT_DATA__ JSON found on this page")
 
-    # Walk forward through the page from that heading until we hit a table
-    table_tag = heading.find_next("table")
-    if table_tag is None:
-        raise ValueError("Found 'Men's 100 Metres' heading but no table after it")
+    data = json.loads(script_tag.string)
+    calendar_results = data["props"]["pageProps"]["calendarEventsResults"]
+    competition = calendar_results["competition"]
 
-    results_table = pd.read_html(StringIO(str(table_tag)))[0]
-    results_table.columns = [str(c).strip() for c in results_table.columns]
-    rename_map = {"Mark": "MARK", "Athlete": "ATHLETE", "Pos.": "POS"}
-    results_table = results_table.rename(columns=rename_map)
+    main_section = next(
+        (et for et in calendar_results["eventTitles"]
+         if et.get("eventTitle") == "Diamond Discipline"),
+        None,
+    )
+    if main_section is None:
+        main_section = next(
+            (et for et in calendar_results["eventTitles"]
+             if et.get("eventTitle") not in SECONDARY_HUB_TIERS
+             and any(e.get("event") == "Men's 100 Metres" for e in et.get("events", []))),
+            None,
+        )
+    if main_section is None:
+        raise ValueError("No elite-tier section on this page")
 
-    # Country isn't a labeled column here — it's a separate cell before
-    # athlete name in this format. Handle gracefully if missing.
-    if "COUNTRY" not in results_table.columns:
-        results_table["COUNTRY"] = None
+    event = next(
+        (e for e in main_section["events"] if e.get("event") == "Men's 100 Metres"),
+        None,
+    )
+    if event is None:
+        raise ValueError("Men's 100 Metres is not an elite-tier event at this meeting")
 
-    if "MARK" not in results_table.columns:
-        raise ValueError("Table found but no MARK column — wrong table matched")
+    venue = competition.get("venue")
+    meet_name = normalize_meet_name(competition.get("name"))
+    start_date = competition.get("startDate")  # ISO "YYYY-MM-DD", or None
+    date_str = pd.to_datetime(start_date).strftime("%d/%m/%Y %H:%M:%S") if start_date else None
 
+    rows = []
+    for race in event.get("races", []):
+        round_label = _map_round_label(race.get("race"))
+        wind = _parse_wind(race.get("wind"))
+        for result in race.get("results", []):
+            competitor = result.get("competitor") or {}
+            rows.append({
+                "ATHLETE": competitor.get("name"),
+                "COUNTRY": result.get("nationality"),
+                "MARK": result.get("mark"),
+                "Reaction Time": None,  # not present in this page format
+                "wind": wind,
+                "date": date_str,
+                "venue": venue,
+                "meet_name": meet_name,
+                "source_url": url,
+                "round": round_label,
+            })
+
+    results_table = pd.DataFrame(rows)
+    if results_table.empty or "MARK" not in results_table.columns:
+        raise ValueError("Diamond Discipline Men's 100 Metres section has no results")
+
+    results_table = _drop_non_sprint_marks(results_table)
     results_table[["time", "record_flag"]] = results_table["MARK"].apply(
         lambda m: pd.Series(clean_mark(m))
     )
+    _check_plausible_sprint_times(results_table)
 
-    if "Reaction Time" not in results_table.columns:
-        results_table["Reaction Time"] = None
-
-    # Wind — look for text near the "Men's 100 Metres" heading specifically
-    wind = None
-    wind_text = heading.find_next(string=lambda s: s and "Wind" in s)
-    if wind_text:
-        match = re.search(r"Wind:\s*([+-]?\d+\.\d+)", wind_text)
-        if match:
-            wind = float(match.group(1))
-
-    results_table["wind"] = wind
-    results_table["date"] = None   # not reliably extractable from this format yet
-    results_table["venue"] = None
-    results_table["meet_name"] = soup.title.string if soup.title else None
-    results_table["source_url"] = url
-    results_table["round"] = "final"
-
-    return results_table[["ATHLETE", "COUNTRY", "time", "record_flag", "Reaction Time",
-                            "wind", "date", "venue", "meet_name", "source_url", "round"]]
+    return results_table[RESULT_COLUMNS]
 def get_mens_100m_url(meeting_url):
     """Given a Diamond League meeting page URL, find its men's 100m final result URL."""
-    resp = requests.get(meeting_url, headers=HEADERS, timeout=15)
-    resp.raise_for_status()
+    resp = fetch(meeting_url)
 
     soup = BeautifulSoup(resp.text, "html.parser")
     links = soup.find_all("a", href=True)
@@ -172,8 +295,7 @@ def get_diamond_league_meeting_links(year=None):
     if year:
         url += f"?year={year}"
 
-    resp = requests.get(url, headers=HEADERS, timeout=15)
-    resp.raise_for_status()
+    resp = fetch(url)
 
     soup = BeautifulSoup(resp.text, "html.parser")
     rows = soup.find_all("tr")
