@@ -19,10 +19,11 @@ HALF_LIFE_DAYS = 365 * 2  # a race's weight halves every ~2 years
 MIN_PLAUSIBLE_TIME = 9.0
 MAX_PLAUSIBLE_TIME = 13.0
 
-# A single real 100m heat/semi/final has 3-10 lanes; source_urls with more
-# rows than that are mislabeled multi-heat/full-meet dumps, not one race —
-# pairwise-comparing everyone in one of those would credit made-up
-# head-to-head results between people who never actually raced each other.
+# A single real 100m heat/semi/final has 3-10 lanes; (source_url, round)
+# groups with more rows than that are mislabeled multi-heat/full-meet
+# dumps, not one race — pairwise-comparing everyone in one of those would
+# credit made-up head-to-head results between people who never actually
+# raced each other.
 MIN_REAL_RACE_SIZE = 3
 MAX_REAL_RACE_SIZE = 10
 
@@ -39,8 +40,12 @@ def load_clean_data(csv_path="100m_races_dataset.csv"):
     implausible = (df["time"] < MIN_PLAUSIBLE_TIME) | (df["time"] > MAX_PLAUSIBLE_TIME)
     df.loc[implausible, "time"] = np.nan
 
-    # Derive round from the URL itself instead of trusting the stored column,
-    # since older scrapes (before the round column existed) left it as NaN.
+    # Fall back to inferring round from the URL only where it's missing.
+    # Trust the stored column otherwise: hub pages (calendar-results URLs)
+    # share one URL across every round of the meeting, so re-deriving round
+    # from the URL for those rows would collapse heats/semis/final into
+    # whatever infer_round() defaults to (see MAX_REAL_RACE_SIZE note below
+    # for the fallout when this used to run unconditionally).
     def infer_round(url):
         if "/semi-final/" in url:
             return "semi-final"
@@ -49,7 +54,8 @@ def load_clean_data(csv_path="100m_races_dataset.csv"):
         else:
             return "final"
 
-    df["round"] = df["source_url"].apply(infer_round)
+    missing_round = df["round"].isna() | (df["round"].str.strip() == "")
+    df.loc[missing_round, "round"] = df.loc[missing_round, "source_url"].apply(infer_round)
 
     coefficient = estimate_wind_coefficient(df)
     df["adj_time"] = df["time"] - coefficient * df["wind"]
@@ -66,11 +72,14 @@ def load_clean_data(csv_path="100m_races_dataset.csv"):
 
 
 def get_real_races(df):
-    """Rows belonging to a single genuine race (plausible field size), across
-    all rounds — filters out mislabeled multi-heat/full-meet dumps."""
-    sizes = df.groupby("source_url").size()
-    real_ids = sizes[(sizes >= MIN_REAL_RACE_SIZE) & (sizes <= MAX_REAL_RACE_SIZE)].index
-    return df[df["source_url"].isin(real_ids)]
+    """Rows belonging to a single genuine race (plausible field size).
+    Keyed on (source_url, round), not source_url alone: hub pages
+    (calendar-results URLs) share one URL across every round of a meeting,
+    so grouping by source_url alone would conflate heats/semis/final into
+    one oversized group and exclude even a real, correctly-sized final
+    just because it shares a URL with the meeting's other rounds."""
+    sizes = df.groupby(["source_url", "round"])["ATHLETE"].transform("size")
+    return df[(sizes >= MIN_REAL_RACE_SIZE) & (sizes <= MAX_REAL_RACE_SIZE)]
 
 
 def compute_elo_history(df):
@@ -89,7 +98,7 @@ def compute_elo_history(df):
     ratings = {}
     rows = []
 
-    for source_url, race in races.groupby("source_url", sort=False):
+    for (source_url, round_), race in races.groupby(["source_url", "round"], sort=False):
         race = race.sort_values("time")
         athletes = race["ATHLETE"].tolist()
         if len(athletes) < 2:
@@ -189,6 +198,12 @@ def compute_reliability_before(cutoff_date, df, prior_strength=8):
     via a Beta prior (worth prior_strength races) so an athlete with only 1-2
     starts doesn't get scored as a false 0% or 100% reliable."""
     history = df[df["date"] < cutoff_date]
+    # Slicing propagates df.attrs (which holds elo_history, a DataFrame) onto
+    # history and everything derived from it. pandas' own join/concat later
+    # compares .attrs for equality to decide what to keep, and comparing two
+    # DataFrames with == raises instead of returning a bool — strip attrs
+    # here so that comparison never has a DataFrame to choke on.
+    history.attrs = {}
     if len(history) == 0:
         return pd.DataFrame(columns=["starts", "finishes", "finish_rate"])
 
@@ -209,6 +224,7 @@ def compute_stats_before(cutoff_date, df):
     """Recency-weighted stats using only races strictly before cutoff_date.
     Prevents leaking a target race's own result into an athlete's 'known form'."""
     history = df[df["date"] < cutoff_date]
+    history.attrs = {}  # see compute_reliability_before for why
     if len(history) == 0:
         return pd.DataFrame(columns=["weighted_avg_time", "races_used", "consistency",
                                       "finish_rate", "starts", "finishes", "elo"])
