@@ -55,13 +55,30 @@ real upcoming field. See `README.md` for the technical details and
 
 - Automatically pulling an upcoming race's start list, instead of typing
   the field in by hand.
-- Reducing the "cold start" gap — ~9% of real winners had zero prior race
+- Reducing the "cold start" gap — ~8% of real winners had zero prior race
   history in the dataset, which is unpredictable by construction until more
   data is collected.
 - ~~Root-causing the scraper bug that occasionally grabs the wrong
-  row/column from a results page~~ — investigated: not a scraper bug. The
-  implausible marks (e.g. 45.12s) are genuinely published as-is on
-  worldathletics.org itself; still filtered to NaN downstream in
-  `features.py` since they're not real sprint times.
-- Fixing multi-heat "final" URL mislabeling at the source, rather than
-  working around it with a field-size filter.
+  row/column from a results page~~ — investigated: the *implausible-time*
+  rows (e.g. 45.12s) turned out not to be a scraper bug at all, they're
+  genuinely published as-is on worldathletics.org. But a real, much bigger
+  scraper bug was found and fixed in the same investigation: `scrape_race()`
+  picked one results table per page (`max(tables, key=len)`), and heats/
+  semi-final pages render one table *per heat group* — on the tie this
+  silently kept only the first heat and discarded the rest (up to 48 of 56
+  athletes on one 1987 Worlds heats page). Fixed to concatenate every
+  results table on the page; dataset rebuilt 5,356 -> 6,795 rows.
+- ~~Fixing multi-heat "final" URL mislabeling at the source~~ — fixed: it
+  was actually two bugs — `features.py` was overwriting an already-correct
+  `round` column with URL-based guessing (which can't distinguish rounds on
+  hub pages, since they share one URL across the whole meeting), and
+  `get_real_races`/Elo were grouping by `source_url` alone instead of
+  `(source_url, round)`. Mislabeled-as-final groups dropped from 66 down to
+  3 residual cases (modest 16-18 person fields, not the previous 76-125).
+- Residual, smaller risk left open: on hub pages, individual heat *groups*
+  within the same round (e.g. Heat 1 vs Heat 2) all collapse to the same
+  `round` value, so if two small heats' combined size lands in the 3-10
+  "real race" window, Elo could still credit a made-up head-to-head between
+  people who raced in different heats. Not fixed this session — would need
+  scrape_hub_race to persist a per-heat-group id, which the current CSV
+  schema doesn't have retroactively.

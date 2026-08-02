@@ -44,8 +44,9 @@ on this machine is 3.8 with pandas 2.0.3, which will crash — use `py -3.14`
      finishing at all.
    - `elo_win_probs()` — win probability from head-to-head Elo alone.
    - `predict_race_full()` — **the recommended entry point.** Blends
-     Monte Carlo and Elo 50/50, which backtested better than either alone.
-4. **`backtest.py`** — validates all of the above against ~136 real finals
+     Monte Carlo and Elo at a 70/30 weighting (Monte Carlo/Elo), which
+     backtested better than 50/50 or 70/30 Elo-favored splits.
+4. **`backtest.py`** — validates all of the above against ~199 real finals
    (filtered to plausible field sizes; some raw "final" URLs are actually
    mislabeled multi-heat dumps). Run `py -3.14 backtest.py` for the full
    breakdown.
@@ -57,8 +58,8 @@ methodology):
 
 | | Top-1 accuracy | vs. chance |
 |---|---|---|
-| All real finals (136) | 42.6% | 12.1% |
-| Excluding cold-start winners* | 46.8% | 11.9% |
+| All real finals (199) | 42.7% | 12.3% |
+| Excluding cold-start winners* | 46.4% | 12.1% |
 
 \* cold start = the actual winner had zero prior races in the dataset —
 unpredictable in principle, not a model failure.
@@ -67,12 +68,12 @@ unpredictable in principle, not a model failure.
 realistic range for this kind of data — these races are decided by
 hundredths of a second and real day-of factors (reaction time, tactical
 racing, nerves) that aren't in this dataset. Treat the output as *win
-probabilities to weigh*, not a confident single prediction — half of the
-model's misses had the actual winner ranked in its own top 2.
+probabilities to weigh*, not a confident single prediction — roughly half of
+the model's misses had the actual winner ranked in its own top 2.
 
 ## Known limitations
 
-- **Cold start**: ~9% of race winners have zero prior history in the
+- **Cold start**: ~8% of race winners have zero prior history in the
   dataset (debutants, or the first race of an early era) — unpredictable by
   construction.
 - **No start times/splits/lane data** — only finishing time, wind, round,
@@ -83,3 +84,8 @@ model's misses had the actual winner ranked in its own top 2.
   DNF flag), not a scraper parsing bug. Filtered to NaN in `features.py`.
 - No automated way to fetch an upcoming race's start list — the field has
   to be typed in by hand (see Quick start above).
+- On hub pages, individual heat *groups* within the same round (e.g. Heat 1
+  vs Heat 2) aren't distinguished in the stored data — they all share the
+  same `round` value. If two small heats' combined size lands inside the
+  "real race" field-size window used for Elo, it could credit a made-up
+  head-to-head between athletes who actually raced in different heats.
