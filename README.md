@@ -77,8 +77,9 @@ model's misses had the actual winner ranked in its own top 2.
   construction.
 - **No start times/splits/lane data** — only finishing time, wind, round,
   reaction time (where published), and record flags.
-- A handful of scraped rows had physically impossible times (scraper
-  picked up the wrong row on specific pages) — filtered in `features.py`,
-  but the root cause in `scraper.py` hasn't been fixed.
+- A handful of rows have physically impossible times (e.g. 45.12s). Verified
+  against the live worldathletics.org source — these are genuinely published
+  there as-is (likely a DNF/injury/fall coded as a numeric mark instead of a
+  DNF flag), not a scraper parsing bug. Filtered to NaN in `features.py`.
 - No automated way to fetch an upcoming race's start list — the field has
   to be typed in by hand (see Quick start above).

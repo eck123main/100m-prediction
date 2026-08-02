@@ -58,7 +58,10 @@ real upcoming field. See `README.md` for the technical details and
 - Reducing the "cold start" gap — ~9% of real winners had zero prior race
   history in the dataset, which is unpredictable by construction until more
   data is collected.
-- Root-causing the scraper bug that occasionally grabs the wrong
-  row/column from a results page (currently just filtered out downstream).
+- ~~Root-causing the scraper bug that occasionally grabs the wrong
+  row/column from a results page~~ — investigated: not a scraper bug. The
+  implausible marks (e.g. 45.12s) are genuinely published as-is on
+  worldathletics.org itself; still filtered to NaN downstream in
+  `features.py` since they're not real sprint times.
 - Fixing multi-heat "final" URL mislabeling at the source, rather than
   working around it with a field-size filter.
