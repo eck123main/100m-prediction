@@ -5,7 +5,7 @@ PROJECT LOCATION
 - Windows path: D:\athleticsprediction
 - WSL path: /mnt/d/athleticsprediction
 - GitHub: https://github.com/eck123main/100m-prediction (branch: main)
-- Everything below is committed and pushed as of commit 951f9d1.
+- Everything below is committed and pushed as of commit ddc8711.
 
 PYTHON ENVIRONMENT — IMPORTANT
 - This machine has multiple Python installs. The default `python`/`py` on
@@ -15,9 +15,17 @@ PYTHON ENVIRONMENT — IMPORTANT
   2.3.1, also fine). Always run scripts as e.g.:
     py -3.14 predict.py "Noah Lyles" "Kishane Thompson"
     py -3.14 backtest.py
+- Also confirmed working under WSL's python3.12 + pandas 2.3.1 this session
+  (used to investigate/fix bugs — see below). pandas 3.0.5 (what a fresh
+  `pip install pandas` gives you today) used to crash on a `.attrs`
+  propagation issue; that's now fixed (see BUGS FIXED THIS SESSION).
+- If pushing from WSL and `git push` fails with "could not read Username":
+  the repo's credential.helper=manager (Windows GCM) isn't on WSL's PATH.
+  Workaround (doesn't touch saved git config):
+    git -c credential.helper= -c credential.helper=/mnt/c/PROGRA~1/Git/mingw64/bin/git-credential-manager.exe push origin main
 
 WHAT THE PROJECT DOES
-Predicts men's 100m race win probabilities from ~5,356 scraped
+Predicts men's 100m race win probabilities from ~6,795 scraped
 worldathletics.org race results (2016-2026 dense coverage, scattered
 championship finals back to 1983).
 
@@ -32,7 +40,7 @@ FILE MAP
                                 (see Quick Start below)
 - backtest.py                 — leak-free backtest harness against real finals
 - README.md                   — full technical docs
-- PROJECT_GOALS.md            — project vision/ambitions (written this session)
+- PROJECT_GOALS.md            — project vision/ambitions
 - pred.ipynb                   — original exploratory notebook (superseded by
                                 the .py modules, kept for history)
 
@@ -42,106 +50,128 @@ Prints win probabilities + weighted_avg_time, finish_rate, races_used, elo
 per athlete. Case-insensitive name matching. Unmatched names are listed
 separately, not silently dropped.
 
-FEATURE PIPELINE (features.py)
-1. load_clean_data() — loads CSV, normalizes names/dates, infers round from
-   URL, filters implausible times (<9.0s or >13.0s — scraper bugs, see
-   below), computes wind coefficient + round offsets + Elo history once.
-2. Wind adjustment: estimate_wind_coefficient() — within-athlete fixed-
-   effects regression (not a guessed physics constant). Came out to
-   ~-0.04 to -0.05 sec per m/s, in line with published estimates.
-3. Round adjustment: estimate_round_offsets() — same fixed-effects approach,
-   normalizes heats/semis to a "final-equivalent" time. Heats ~+0.07s
-   slower than final-equivalent, semis ~-0.02s faster (both small).
-4. Reliability: compute_reliability_before() — Beta-shrunk finish rate
-   (valid time vs DNF/DQ/DNS), leak-free (only uses races before cutoff).
-5. Elo: compute_elo_history()/compute_elo_before() — sequential head-to-head
-   rating from pairwise "who finished ahead of whom" in real single races
-   only (get_real_races() filters field size 3-10 to exclude mislabeled
-   multi-heat/full-meet dumps that show up under some source_urls).
-6. compute_stats_before(cutoff_date, df) — the core leak-free join of all
-   the above, using ONLY data strictly before cutoff_date. This is what
-   makes backtesting honest.
+============================================================================
+THIS SESSION (2026-08-02): BUG HUNT — "look into the scraping bug and all bugs"
+============================================================================
 
-PREDICTION FUNCTIONS (predict.py)
-- predict_race() — naive baseline: rank by recency-weighted time only.
-- simulate_race() — Monte Carlo: each athlete ~ Normal(weighted_avg_time,
-  consistency), with a finish_rate coin-flip each simulated run (a DQ-prone
-  athlete can simulate not finishing).
-- elo_win_probs() — win probs from Elo alone (Bradley-Terry softmax).
-- blend_win_probs() / predict_race_full() — RECOMMENDED. Blends Monte Carlo
-  + Elo 50/50 — backtested better than either alone (see below).
+Set up a working Python env in WSL (bootstrapped pip via get-pip.py, then
+`pip install --user --break-system-packages pandas numpy requests
+beautifulsoup4 lxml html5lib`) to actually run and test the code live
+against worldathletics.org, rather than just reading it. Found and fixed
+six real bugs, all committed and pushed:
 
-BACKTEST RESULTS (backtest.py — run it for full breakdown incl. calibration
-and miss-pattern analysis)
-- 136 real finals evaluated (field size 3-10; source_urls with larger groups
-  under "final" are mislabeled multi-heat/full-meet dumps, excluded).
-- Monte Carlo alone: 41.2% top-1 accuracy vs 12.1% chance-level.
-- Elo alone: 34.5% (weaker standalone signal than time-based model).
-- Blended 50/50 (predict_race_full default): 42.6% overall, 46.8% excluding
-  "cold start" races (winner had zero prior history — 8.8% of races,
-  unpredictable by construction). elo_weight=0.5 beat 0.3 and 0.7 in every
-  slice tested.
-- Miss-pattern analysis: of 68 misses (excl. cold starts), actual winner was
-  in the model's own top 2 half the time, top 3 two-thirds of the time —
-  most misses are close calls, not wild misfires.
-- Investigated "aging veteran overrated" hypothesis on 33 confidently-wrong
-  misses (top_pick_prob >=0.40 but wrong): PARTIALLY true (Justin Gatlin
-  clearly, Michael Rodgers more mixed) but NOT the dominant pattern — most
-  confidently-wrong misses are between similarly-aged contemporaries with no
-  age signal at all (e.g. Trayvon Bromell repeatedly over-favored at 26-27,
-  losing to same-age or older rivals). Conclusion: ~42-47% top-1 is treated
-  as close to a realistic ceiling for this data; building an age feature
-  would need real birth-date data we don't currently scrape.
+1. THE ACTUAL SCRAPER BUG (the big one) — scraper.py `scrape_race()`
+   picked one results table per page via `max(tables, key=len)`. Heats and
+   semi-final pages render one HTML table PER HEAT GROUP, all with
+   identical row counts (WA pads to a fixed lane count) — so on that tie,
+   Python's max() deterministically kept only the FIRST table and silently
+   discarded every other heat. Confirmed live: a 1987 Rome Worlds heats
+   page has 7 tables of 8 athletes each (56 total); only the first 8 were
+   ever scraped. Verified this held across every one of the 48 old-style
+   heats/semi-final URLs in the dataset (every single one was capped at
+   6-10 rows — consistent with "only got one heat table", not a real
+   round). FIXED: now concatenates every table on the page that looks like
+   a results table (has MARK+ATHLETE columns); verified non-regressive on
+   single-table pages (finals always have exactly one table).
 
-REAL BUGS FOUND AND FIXED THIS SESSION (not hypothetical — actually hit)
-1. 14 rows had physically impossible 100m times (e.g. 45.12s for Christophe
-   Lemaitre at Turku 2020) — scraper picked up the wrong row/column on
-   specific pages. Filtered to NaN in load_clean_data (MIN/MAX_PLAUSIBLE_TIME
-   = 9.0/13.0s). ROOT CAUSE IN SCRAPER NOT YET INVESTIGATED.
-2. compute_stats_before crashed (KeyError) on cutoffs with zero prior
-   history (the very first race(s) chronologically) — fixed by returning a
-   properly-columned empty DataFrame instead of a columnless one.
-3. Warning prints in predict.py crashed with UnicodeEncodeError on Windows
-   (cp1252 console) for athlete names with accented characters — fixed by
-   reconfiguring stdout to utf-8.
-4. 66 of 203 raw "final"-round races actually have field sizes up to 125 —
-   these are mislabeled multi-heat/full-meet dumps from calendar-results
-   URLs where infer_round() can't detect the real round and defaults to
-   "final". Worked around via MIN/MAX_REAL_RACE_SIZE (3-10) filtering in
-   get_real_races() wherever pairwise/single-race logic matters (backtest,
-   Elo) — NOT fixed at the scraper source.
+2. Round-label mislabeling — `_map_round_label()` in scraper.py checked
+   `"heat" in label` before `"semi"`, so hub-page labels like
+   "Semifinal - Heat" (contains both substrings) resolved to "heats"
+   instead of "semi-final". Fixed the check order.
+
+3. `load_clean_data()` in features.py was unconditionally overwriting the
+   already-correct `round` column with URL-based guessing. That guessing
+   can't distinguish rounds on hub pages (calendar-results URLs), since
+   ALL rounds of a meeting share one URL — so it collapsed heats/semis/
+   final into whatever infer_round() defaults to ("final"), producing fake
+   giant "finals" with field sizes up to 125. The stored round column was
+   actually 100% populated (0 nulls across 6,795 rows) — no reason to
+   discard it. Fixed to only fill genuinely-missing values.
+
+4. `get_real_races()`/`compute_elo_history()` grouped by `source_url`
+   alone instead of `(source_url, round)` — on hub pages this conflated a
+   real, correctly-sized final with the meeting's heats/semis sharing the
+   same URL, so a legitimate 8-person final got excluded from Elo just for
+   sharing a URL with a 50-person heats round. Confirmed 510 final-round
+   rows across 64 meetings were being wrongly excluded before this fix.
+
+5. pandas 3.x forward-compat crash — features.py stashed a DataFrame
+   (elo_history) inside `df.attrs`. pandas propagates `.attrs` through
+   slicing/groupby, and `.join()`/`.concat()` compare `.attrs` dicts for
+   equality to decide what to keep — comparing two DataFrames with `==`
+   raises "truth value is ambiguous" instead of returning a bool, on
+   pandas 3.0+ (reproduced on 3.0.5; did NOT reproduce on 2.3.1). Fixed by
+   stripping `.attrs` off the `history` slices in compute_stats_before/
+   compute_reliability_before before any groupby/join touches them. This
+   matters because the README's only version pin is a lower bound
+   (pandas >= 2.2) — anyone doing a fresh `pip install pandas` today gets
+   3.x and would hit this crash immediately.
+
+6. Documentation was WRONG about the implausible-time rows (e.g. 45.12s
+   for Christophe Lemaitre at Turku 2020). Previously assumed to be a
+   "scraper mismatch (wrong row/column)". Verified directly against the
+   live worldathletics.org source (both the raw HTML `data-bind` JSON for
+   old-style pages, and the embedded __NEXT_DATA__ JSON for hub pages,
+   across 4 different examples/years/formats) — these times are genuinely
+   published there as-is, most likely a DNF/injury/fall that WA coded as a
+   numeric mark instead of a DNF flag. NOT a scraper bug. The existing
+   filter (set to NaN in features.py) is the correct behavior regardless
+   of the underlying cause — just corrected the comments/docs that
+   misattributed it.
+
+Also: removed dead MIN_FIELD_SIZE/MAX_FIELD_SIZE constants in backtest.py
+(never referenced — actual filtering happens via features.py's
+MIN/MAX_REAL_RACE_SIZE inside get_real_races).
+
+DATASET REBUILT: ran `python collect_data.py` end-to-end with the fixes
+applied. 5,356 -> 6,795 rows (+27%). Verified zero regressions: every
+source_url that existed before has the same or more rows after (checked
+programmatically, not just spot-checked). semi-final round rows went from
+145 to 1,142 (previously mislabeled as heats). Mislabeled-as-"final" URL
+groups with implausible field sizes dropped from 66 down to 3 (and those
+3 are modest 16-18 person fields, not the previous 76-125).
+
+BACKTEST RE-VALIDATED after the rescrape (py3.12/pandas 2.3.1 in WSL):
+- 199 real finals evaluated (up from the previously-documented 136 — the
+  get_real_races grouping fix alone surfaced 64 finals that were wrongly
+  excluded before, even prior to the rescrape).
+- elo_weight=0.3 now beats 0.5 and 0.7 in EVERY slice tested (all races,
+  excl. cold starts, 2016+, 2016+ excl. cold starts) — this is a reversal
+  of the previously-documented finding that 0.5 was best, now that Elo has
+  much more correct semi-final/heats data feeding it. Updated
+  predict_race_full()'s default elo_weight from 0.5 to 0.3.
+- Headline numbers with the new default: 42.7% top-1 (all 199 real
+  finals) / 46.4% (excl. cold starts, 183 races) vs ~12% chance-level.
+  Close to the old headline numbers (42.6%/46.8%) but now on a larger,
+  more honest evaluation set built from actually-fixed data.
+- Cold-start rate: ~8% of winners had zero prior history (was ~9%).
+- Miss pattern held up: actual winner in the model's own top 2 ~49.5% of
+  misses, top 3 ~63.6%.
 
 KNOWN OPEN ITEMS / NOT YET BUILT
 - No automated start-list scraping — upcoming race fields must be typed in
   by hand (CLI takes them as command-line args).
-- Cold-start gap (~9% of winners had zero history) — more data collection
-  would help, now with concrete backtest-driven justification (unlike
-  earlier in the session, when we deliberately deferred blind collection).
-- Scraper wrong-row bug (item 1 above) not root-caused, just filtered.
-- Multi-heat "final" mislabeling (item 4 above) not fixed at the source.
-- Elo weight (0.5) was chosen from only 3 candidates {0.3, 0.5, 0.7} tested
-  on 136 races — a small sample; more rigorous tuning (e.g. train/test split
-  across eras) wasn't done.
-
-DATA QUALITY NOTES
-- Dataset columns: ATHLETE, COUNTRY, time, record_flag, Reaction Time, wind,
-  date, venue, meet_name, source_url, round.
-- record_flag coverage ~7% (Q/q, PB/SB, NR/AR/WR/WL/OR/CR, DNS/DNF/DQ).
-- wind coverage ~99%, date ~99%, venue ~90%, Reaction Time ~7% (mostly
-  Olympics/Worlds pages that published it).
-- ~1,677 unique athletes; median athlete has only 1 race; top athletes
-  (Lyles, Bromell, Kerley, Bednarek, Hughes, Jacobs, Ujah, Baker) have
-  13-37 races each spanning multiple years — this is where the model is
-  most trustworthy.
+- Cold-start gap (~8% of winners had zero history) — inherent to sparse
+  early-career/early-era data, not fixable without more data collection.
+- Residual Elo precision gap: on hub pages, individual heat GROUPS within
+  the same round (e.g. Heat 1 vs Heat 2) aren't distinguished in the
+  stored data — they share the same `round` value. If two small heats'
+  combined size lands inside the 3-10 "real race" window used for Elo, it
+  could still credit a made-up head-to-head between people who actually
+  raced in different heats. Would need scrape_hub_race to persist a
+  per-heat-group id (a schema change + re-scrape) to fully close — not
+  done this session; flagged as a known limitation instead.
+- Elo weight (0.3, was 0.5) still only tested against 2 other candidates
+  {0.3, 0.5, 0.7} on ~199 races — a small sample; more rigorous tuning
+  (e.g. train/test split across eras, finer weight grid) wasn't done.
+- Minor: collect_data.py prints a pandas FutureWarning about concatenating
+  empty/all-NA columns (e.g. an all-None Reaction Time column). Harmless
+  today, will need a fix when pandas actually changes this behavior.
 
 GIT / COMMIT HISTORY THIS SESSION (chronological, all pushed to origin/main)
-- Checkpointed pre-existing uncommitted scraper/dataset work.
-- Added .gitignore, untracked __pycache__.
-- Added reliability (finish-rate) feature.
-- Added wind normalization (empirical fixed-effects coefficient).
-- Added round-aware form + fixed the implausible-time scraper bug.
-- Added leak-free backtest harness (backtest.py) + fixed two more bugs
-  (empty-history crash, UnicodeEncodeError).
-- Added head-to-head Elo feature + backtest miss-pattern analysis.
-- Added prediction CLI (predict.py __main__) + real README.
-- (This session's final commit will add PROJECT_GOALS.md + this file.)
+- docs: correct scraper-bug claim — implausible times are real source data
+- fix: correct round grouping and pandas 3 compat in features.py
+- fix: scrape_race dropped every heat but one; fix round mislabeling
+- chore: rebuild dataset with scraper fixes (5,356 -> 6,795 rows)
+- chore: remove dead MIN/MAX_FIELD_SIZE constants in backtest.py
+- fix: update elo_weight default and docs from re-validated backtest
