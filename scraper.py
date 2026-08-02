@@ -95,15 +95,30 @@ def clean_mark(mark):
         time = np.nan
         flag = parts[0]  # e.g. 'DNF', 'DQ', 'DNS'
     return time, flag
+def _rename_result_columns(table):
+    """Strip whitespace from a raw pd.read_html table's column labels and
+    rename them to this module's schema."""
+    table = table.copy()
+    table.columns = [str(c).strip() for c in table.columns]
+    rename_map = {"Mark": "MARK", "Athlete": "ATHLETE", "Unnamed: 2": "COUNTRY"}
+    return table.rename(columns=rename_map)
+
+
 def scrape_race(url, known_venue=None):
     resp = fetch(url)
 
     tables = pd.read_html(StringIO(resp.text))
-    results_table = max(tables, key=len)
-
-    results_table.columns = [str(c).strip() for c in results_table.columns]
-    rename_map = {"Mark": "MARK", "Athlete": "ATHLETE", "Unnamed: 2": "COUNTRY"}
-    results_table = results_table.rename(columns=rename_map)
+    renamed = [_rename_result_columns(t) for t in tables]
+    # A heats/semi-final page renders one table per heat group — all with
+    # identical columns/length — not one table for the whole round. Picking
+    # a single table (even "the largest", which on a tie is just the first)
+    # silently drops every other heat group's athletes. Concatenate every
+    # table that looks like a results table instead; a final page always has
+    # exactly one such table, so this is a no-op there.
+    results_tables = [t for t in renamed if "MARK" in t.columns and "ATHLETE" in t.columns]
+    if not results_tables:
+        raise ValueError("No results table found on this page")
+    results_table = pd.concat(results_tables, ignore_index=True)
 
     results_table = _drop_non_sprint_marks(results_table)
     results_table[["time", "record_flag"]] = results_table["MARK"].apply(
@@ -161,15 +176,19 @@ def scrape_race(url, known_venue=None):
     return results_table[RESULT_COLUMNS]
 
 def _map_round_label(race_label):
-    """Map a hub-page race label ('Final', 'Heat 1', 'Semi-Final 2', ...) to
-    the same round vocabulary used elsewhere in the dataset."""
+    """Map a hub-page race label ('Final', 'Heat 1', 'Semi-Final 2',
+    'Semifinal - Heat', ...) to the same round vocabulary used elsewhere in
+    the dataset. Checks "semi" before "heat": some hub pages label a
+    semi-final's individual heat groups as e.g. 'Semifinal - Heat', which
+    contains both substrings and must resolve to 'semi-final', not the
+    first-round 'heats' bucket."""
     if not race_label:
         return "final"
     label = race_label.lower()
-    if "heat" in label:
-        return "heats"
     if "semi" in label:
         return "semi-final"
+    if "heat" in label:
+        return "heats"
     return "final"
 
 
