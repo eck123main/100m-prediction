@@ -49,7 +49,7 @@ time, reliability-gated Monte Carlo, head-to-head Elo, blended prediction)
 is built and validated: ~42-47% top-1 accuracy on real finals vs. ~12%
 chance-level. A command-line tool exists to actually run a prediction on a
 real upcoming field. See `README.md` for the technical details and
-`session_context.txt` for a full recap of what's been done.
+`context.md` for a full recap of what's been done.
 
 ## Open ambitions (not yet built)
 
