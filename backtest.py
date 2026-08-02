@@ -12,10 +12,6 @@ import pandas as pd
 from features import compute_stats_before, get_real_races
 from predict import predict_race, simulate_race, elo_win_probs, blend_win_probs
 
-MIN_FIELD_SIZE = 3
-MAX_FIELD_SIZE = 10  # real 100m finals are 3-10 lanes; bigger "finals" in the
-                      # raw data are mislabeled full-meet result dumps
-
 ELO_WEIGHTS_TO_COMPARE = [0.3, 0.5, 0.7]
 
 
