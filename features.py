@@ -10,8 +10,12 @@ HALF_LIFE_DAYS = 365 * 2  # a race's weight halves every ~2 years
 
 # Men's 100m world record is 9.58s; even a weak heat qualifier at the
 # competition levels this scraper covers finishes well under 13s. Times
-# outside this band are scraper mismatches (wrong row/column picked up from
-# a results table), not real races — e.g. one row records 45.12s.
+# outside this band (e.g. one row records 45.12s) were checked against the
+# live worldathletics.org source (both the old HTML tables and the newer
+# __NEXT_DATA__ JSON) and are genuinely published there as-is — not a
+# scraper parsing bug. They're presumably a DNF/injury/fall that World
+# Athletics coded as a numeric mark instead of a DNF flag. Treated as NaN
+# here either way, since they're not a representative sprint time.
 MIN_PLAUSIBLE_TIME = 9.0
 MAX_PLAUSIBLE_TIME = 13.0
 
