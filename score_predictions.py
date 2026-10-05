@@ -49,12 +49,18 @@ def main():
             continue
         probs = pred.set_index("athlete")["win_prob"].sort_values(ascending=False)
         p = probs.get(winner, 0.0)
-        rows.append({
+        row = {
             "logged_at": logged_at, "race_url": url, "status": "scored",
             "winner": winner, "top_pick": probs.index[0],
             "correct": probs.index[0] == winner,
             "prob_to_winner": p, "logloss": -np.log(max(p, EPS)),
-        })
+        }
+        if "book_prob" in pred and pred["book_prob"].notna().any():
+            book = pred.set_index("athlete")["book_prob"].fillna(0).sort_values(ascending=False)
+            bp = book.get(winner, 0.0)
+            row.update({"book_pick": book.index[0], "book_correct": book.index[0] == winner,
+                        "book_prob_to_winner": bp, "book_logloss": -np.log(max(bp, EPS))})
+        rows.append(row)
 
     report = pd.DataFrame(rows)
     pd.set_option("display.width", 200)
@@ -64,6 +70,12 @@ def main():
         print(f"\nScored {len(scored)} races: top-1 {scored['correct'].mean():.1%}, "
               f"mean log-loss {scored['logloss'].mean():.3f}, "
               f"mean prob to winner {scored['prob_to_winner'].mean():.1%}")
+    if "book_logloss" in scored and scored["book_logloss"].notna().any():
+        both = scored.dropna(subset=["book_logloss"])
+        print(f"\nModel vs bookmaker on the {len(both)} races with odds logged "
+              f"(lower log-loss is better):")
+        print(f"  model:     top-1 {both['correct'].mean():.1%}, log-loss {both['logloss'].mean():.3f}")
+        print(f"  bookmaker: top-1 {both['book_correct'].mean():.1%}, log-loss {both['book_logloss'].mean():.3f}")
     print(f"Pending: {(report['status'] == 'pending').sum()}")
 
 
