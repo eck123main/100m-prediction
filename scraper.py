@@ -363,3 +363,61 @@ def generate_round_variants(final_url):
         variants.append(final_url.replace("/final/", "/semi-final/"))
         variants.append(final_url.replace("/final/", "/heats/"))
     return variants
+
+def _hub_start_list_names(start_list):
+    """Best-effort athlete names from a hub race's startList field. Its
+    pre-race shape hasn't been observed yet (WA clears it once results are
+    published), so accept the shapes results[] uses and fail loudly
+    otherwise rather than guessing."""
+    names = []
+    for entry in start_list or []:
+        if not isinstance(entry, dict):
+            continue
+        competitor = entry.get("competitor") or {}
+        name = competitor.get("name") or entry.get("name") or entry.get("athlete")
+        if name:
+            names.append(name)
+    return names
+
+
+def fetch_start_list(url):
+    """Return the men's 100m field (list of athlete names) for an upcoming race.
+
+    Supports:
+    - Old-style championship/meeting pages (.../men/100-metres/<round>/result
+      or .../startlist): reads the /startlist table. Verified on Tokyo 2025.
+    - Hub pages (competition/calendar-results/results/{id}): reads the elite
+      tier's races[].startList, or the entrants in results[] if the race has
+      no marks yet. Not yet verified against a live pre-race page.
+    For a hub meeting with several races (heats), returns every entrant.
+    """
+    if "/100-metres/" in url:
+        sl_url = re.sub(r"/(result|startlist)/?$", "", url.rstrip("/")) + "/startlist"
+        tables = [_rename_result_columns(t) for t in pd.read_html(StringIO(fetch(sl_url).text))]
+        tables = [t for t in tables if "ATHLETE" in t.columns]
+        if not tables:
+            raise ValueError(f"No start list table found at {sl_url}")
+        return pd.concat(tables)["ATHLETE"].dropna().astype(str).str.strip().tolist()
+
+    soup = BeautifulSoup(fetch(url).text, "html.parser")
+    script_tag = soup.find("script", id="__NEXT_DATA__")
+    if script_tag is None or not script_tag.string:
+        raise ValueError("No __NEXT_DATA__ JSON found on this page")
+    calendar_results = json.loads(script_tag.string)["props"]["pageProps"]["calendarEventsResults"]
+    sections = [et for et in calendar_results["eventTitles"]
+                if any(e.get("event") == "Men's 100 Metres" for e in et.get("events", []))]
+    section = next((et for tier in ELITE_HUB_TIERS for et in sections
+                    if et.get("eventTitle") == tier), None)
+    if section is None:
+        raise ValueError("No elite-tier men's 100m on this page")
+    event = next(e for e in section["events"] if e.get("event") == "Men's 100 Metres")
+
+    names = []
+    for race in event.get("races", []):
+        names += _hub_start_list_names(race.get("startList"))
+        if not race.get("startList"):
+            names += _hub_start_list_names(race.get("results"))
+    if not names:
+        raise ValueError("Men's 100m found but no start list published yet "
+                         "(or its format isn't recognized) — pass names manually")
+    return list(dict.fromkeys(names))

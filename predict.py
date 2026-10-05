@@ -110,20 +110,39 @@ def predict_race_full(athlete_names, stats_table, n_simulations=10000, min_races
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print('Usage: python predict.py "Athlete Name" "Athlete Name" ...')
-        sys.exit(1)
+    import argparse
 
-    from features import load_clean_data, compute_all_time_stats
+    from features import load_clean_data, compute_all_time_stats, compute_stats_before
 
-    field = [name.strip().title() for name in sys.argv[1:]]
+    parser = argparse.ArgumentParser(description="Predict a men's 100m race.")
+    parser.add_argument("athletes", nargs="*", help='athlete names, e.g. "Noah Lyles"')
+    parser.add_argument("--startlist", metavar="URL",
+                        help="fetch the field from a worldathletics.org race/meeting page "
+                             "instead of typing names")
+    parser.add_argument("--before", metavar="YYYY-MM-DD",
+                        help="only use results before this date (replay a past race leak-free)")
+    args = parser.parse_args()
+
+    names = list(args.athletes)
+    if args.startlist:
+        from scraper import fetch_start_list
+        names += fetch_start_list(args.startlist)
+    if not names:
+        parser.error("give athlete names and/or --startlist URL")
+    field = list(dict.fromkeys(name.strip().title() for name in names))
 
     df = load_clean_data()
-    stats = compute_all_time_stats(df)
+    if args.before:
+        cutoff = pd.Timestamp(args.before)
+        stats = compute_stats_before(cutoff, df)
+        data_through = df.loc[df["date"] < cutoff, "date"].max().date()
+    else:
+        stats = compute_all_time_stats(df)
+        data_through = df["date"].max().date()
     probs = predict_race_full(field, stats)
 
     print(f"\n100m final prediction — {len(field)} athletes requested, {len(probs)} matched")
-    print(f"Data through {df['date'].max().date()}\n")
+    print(f"Data through {data_through}\n")
 
     table = stats.loc[probs.index, ["weighted_avg_time", "finish_rate", "races_used", "elo"]].copy()
     table.insert(0, "win_prob", probs)
