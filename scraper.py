@@ -185,12 +185,18 @@ def _map_round_label(race_label):
     the dataset. Checks "semi" before "heat": some hub pages label a
     semi-final's individual heat groups as e.g. 'Semifinal - Heat', which
     contains both substrings and must resolve to 'semi-final', not the
-    first-round 'heats' bucket."""
+    first-round 'heats' bucket. Quarter-finals ('Quarterfinal - Heat') get
+    their own round; decathlon races ('Combined - Group', which some
+    championship pages list in the same section) return None and are skipped."""
     if not race_label:
         return "final"
     label = race_label.lower()
+    if "combined" in label:
+        return None  # decathlon 100m ("Combined - Group"), not a 100m race
     if "semi" in label:
         return "semi-final"
+    if "quarter" in label:
+        return "quarter-final"
     if "heat" in label:
         return "heats"
     return "final"
@@ -274,13 +280,18 @@ def scrape_hub_race(url):
     venue = competition.get("venue")
     meet_name = normalize_meet_name(competition.get("name"))
     start_date = competition.get("startDate")  # ISO "YYYY-MM-DD", or None
-    date_str = pd.to_datetime(start_date).strftime("%d/%m/%Y %H:%M:%S") if start_date else None
 
     rows = []
     heats_seen = {}
     for race in event.get("races", []):
         round_label = _map_round_label(race.get("race"))
+        if round_label is None:
+            continue
         wind = _parse_wind(race.get("wind"))
+        # Each race carries its own date — on multi-day championships the
+        # heats are days before the final, so they can inform its prediction.
+        race_date = race.get("date") or start_date
+        date_str = pd.to_datetime(race_date).strftime("%d/%m/%Y %H:%M:%S") if race_date else None
         # Several races can share a round label (Heat 1/Heat 2, or an A and B
         # "Final") — number them so each is kept as its own race downstream.
         heats_seen[round_label] = heats_seen.get(round_label, 0) + 1
