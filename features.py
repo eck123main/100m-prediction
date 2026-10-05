@@ -31,6 +31,12 @@ MAX_REAL_RACE_SIZE = 10
 
 BASE_ELO = 1500
 ELO_K = 24
+# Multiplier on ELO_K per round, in case heats (where athletes ease off once
+# qualified) should count less. Tested 2026-10-05 on 295 finals: heats at
+# 1/0.5/0.25/0, semis at 1/0.75/0.5, and overall K x0.67/x1.5 all gave the
+# same blended accuracy (47.1%) and log-loss within 0.002 at elo_weight=0.1,
+# so everything stays at 1.0. See context.md.
+ELO_ROUND_K = {"final": 1.0, "semi-final": 1.0, "heats": 1.0}
 
 
 def load_clean_data(csv_path="100m_races_dataset.csv"):
@@ -91,7 +97,7 @@ def get_real_races(df):
     return df[(sizes >= MIN_REAL_RACE_SIZE) & (sizes <= MAX_REAL_RACE_SIZE)]
 
 
-def compute_elo_history(df):
+def compute_elo_history(df, round_k=None):
     """Replay every real race in chronological order, updating Elo ratings
     via pairwise 'who finished ahead of whom' comparisons — this is the
     head-to-head / field-relative signal, as opposed to each athlete's solo
@@ -101,7 +107,11 @@ def compute_elo_history(df):
 
     Returns one row per (ATHLETE, date, elo) — the athlete's rating right
     after that race. Look up a leak-free rating as of any cutoff via
-    compute_elo_before, which takes the most recent row strictly before it."""
+    compute_elo_before, which takes the most recent row strictly before it.
+
+    round_k overrides ELO_ROUND_K (per-round multiplier on ELO_K); a round
+    with multiplier 0 is skipped entirely."""
+    round_k = ELO_ROUND_K if round_k is None else round_k
     races = get_real_races(df).dropna(subset=["time", "date"]).sort_values("date")
 
     ratings = {}
@@ -113,6 +123,9 @@ def compute_elo_history(df):
         if len(athletes) < 2:
             continue
         date = race["date"].iloc[0]
+        k = ELO_K * round_k.get(race["round"].iloc[0], 1.0)
+        if k == 0:
+            continue
 
         current = {a: ratings.get(a, BASE_ELO) for a in athletes}
         delta = {a: 0.0 for a in athletes}
@@ -127,7 +140,7 @@ def compute_elo_history(df):
                 delta[slower] -= surprise
 
         for a in athletes:
-            ratings[a] = current[a] + ELO_K * delta[a] / (n - 1)
+            ratings[a] = current[a] + k * delta[a] / (n - 1)
             rows.append({"ATHLETE": a, "date": date, "elo": ratings[a]})
 
     return pd.DataFrame(rows, columns=["ATHLETE", "date", "elo"])
