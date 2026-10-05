@@ -9,7 +9,7 @@ predict itself.
 import numpy as np
 import pandas as pd
 
-from features import compute_stats_before, get_real_races
+from features import RACE_KEYS, compute_stats_before, get_real_races
 from predict import predict_race, simulate_race, elo_win_probs, blend_win_probs
 
 ELO_WEIGHTS_TO_COMPARE = [round(w, 1) for w in np.arange(0.0, 1.01, 0.1)]
@@ -51,6 +51,7 @@ def evaluate_race(race_df, df, min_races=1):
 
     result = {
         "source_url": race_df["source_url"].iloc[0],
+        "heat": race_df["heat"].iloc[0],
         "date": date,
         "field_size": len(field),
         "n_scored": len(win_probs),
@@ -81,7 +82,7 @@ def run_backtest(df, min_races=1):
     """Evaluate every real final in df. Returns one row per race."""
     real_finals = get_real_finals(df)
     results = []
-    for source_url, race_df in real_finals.groupby("source_url"):
+    for _, race_df in real_finals.groupby(RACE_KEYS):
         result = evaluate_race(race_df, df, min_races=min_races)
         if result is not None:
             results.append(result)

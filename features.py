@@ -19,11 +19,13 @@ HALF_LIFE_DAYS = 365 * 2  # a race's weight halves every ~2 years
 MIN_PLAUSIBLE_TIME = 9.0
 MAX_PLAUSIBLE_TIME = 13.0
 
-# A single real 100m heat/semi/final has 3-10 lanes; (source_url, round)
-# groups with more rows than that are mislabeled multi-heat/full-meet
-# dumps, not one race — pairwise-comparing everyone in one of those would
+# One race = one (source_url, round, heat) group. A single real 100m
+# heat/semi/final has 3-10 lanes; groups with more rows than that are
+# mislabeled multi-heat/full-meet dumps (e.g. rows scraped before the heat
+# column existed, which default to heat 1), not one race — pairwise-comparing everyone in one of those would
 # credit made-up head-to-head results between people who never actually
 # raced each other.
+RACE_KEYS = ["source_url", "round", "heat"]
 MIN_REAL_RACE_SIZE = 3
 MAX_REAL_RACE_SIZE = 10
 
@@ -57,6 +59,13 @@ def load_clean_data(csv_path="100m_races_dataset.csv"):
     missing_round = df["round"].isna() | (df["round"].str.strip() == "")
     df.loc[missing_round, "round"] = df.loc[missing_round, "source_url"].apply(infer_round)
 
+    # Rows without a heat id (scraped before it existed) collapse into heat 1,
+    # i.e. the old (source_url, round) grouping — groupby would otherwise
+    # silently drop NaN keys.
+    if "heat" not in df.columns:
+        df["heat"] = 1
+    df["heat"] = df["heat"].fillna(1).astype(int)
+
     coefficient = estimate_wind_coefficient(df)
     df["adj_time"] = df["time"] - coefficient * df["wind"]
     df["adj_time"] = df["adj_time"].fillna(df["time"])
@@ -73,12 +82,12 @@ def load_clean_data(csv_path="100m_races_dataset.csv"):
 
 def get_real_races(df):
     """Rows belonging to a single genuine race (plausible field size).
-    Keyed on (source_url, round), not source_url alone: hub pages
-    (calendar-results URLs) share one URL across every round of a meeting,
-    so grouping by source_url alone would conflate heats/semis/final into
-    one oversized group and exclude even a real, correctly-sized final
-    just because it shares a URL with the meeting's other rounds."""
-    sizes = df.groupby(["source_url", "round"])["ATHLETE"].transform("size")
+    Keyed on RACE_KEYS, not source_url alone: hub pages (calendar-results
+    URLs) share one URL across every round of a meeting, and one round can
+    hold several heats, so coarser grouping would conflate separate races
+    into one oversized group and exclude even a real, correctly-sized final
+    just because it shares a URL with the meeting's other races."""
+    sizes = df.groupby(RACE_KEYS)["ATHLETE"].transform("size")
     return df[(sizes >= MIN_REAL_RACE_SIZE) & (sizes <= MAX_REAL_RACE_SIZE)]
 
 
@@ -98,7 +107,7 @@ def compute_elo_history(df):
     ratings = {}
     rows = []
 
-    for (source_url, round_), race in races.groupby(["source_url", "round"], sort=False):
+    for _, race in races.groupby(RACE_KEYS, sort=False):
         race = race.sort_values("time")
         athletes = race["ATHLETE"].tolist()
         if len(athletes) < 2:

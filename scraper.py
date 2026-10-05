@@ -20,7 +20,7 @@ HEADERS = {
 }
 
 RESULT_COLUMNS = ["ATHLETE", "COUNTRY", "time", "record_flag", "Reaction Time",
-                   "wind", "date", "venue", "meet_name", "source_url", "round"]
+                   "wind", "date", "venue", "meet_name", "source_url", "round", "heat"]
 
 
 def fetch(url, max_retries=3, backoff_base=1.0, **kwargs):
@@ -118,7 +118,11 @@ def scrape_race(url, known_venue=None):
     results_tables = [t for t in renamed if "MARK" in t.columns and "ATHLETE" in t.columns]
     if not results_tables:
         raise ValueError("No results table found on this page")
-    results_table = pd.concat(results_tables, ignore_index=True)
+    # Keep which table (= heat group) each row came from, so downstream code
+    # can treat each heat as its own race instead of one giant field.
+    results_table = pd.concat(
+        [t.assign(heat=i) for i, t in enumerate(results_tables, start=1)], ignore_index=True
+    )
 
     results_table = _drop_non_sprint_marks(results_table)
     results_table[["time", "record_flag"]] = results_table["MARK"].apply(
@@ -273,9 +277,13 @@ def scrape_hub_race(url):
     date_str = pd.to_datetime(start_date).strftime("%d/%m/%Y %H:%M:%S") if start_date else None
 
     rows = []
+    heats_seen = {}
     for race in event.get("races", []):
         round_label = _map_round_label(race.get("race"))
         wind = _parse_wind(race.get("wind"))
+        # Several races can share a round label (Heat 1/Heat 2, or an A and B
+        # "Final") — number them so each is kept as its own race downstream.
+        heats_seen[round_label] = heats_seen.get(round_label, 0) + 1
         for result in race.get("results", []):
             competitor = result.get("competitor") or {}
             rows.append({
@@ -289,6 +297,7 @@ def scrape_hub_race(url):
                 "meet_name": meet_name,
                 "source_url": url,
                 "round": round_label,
+                "heat": heats_seen[round_label],
             })
 
     results_table = pd.DataFrame(rows)
