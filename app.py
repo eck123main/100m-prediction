@@ -28,8 +28,12 @@ def get_data():
     return load_clean_data()
 
 
-@st.cache_data(show_spinner="Running backtest on every real final (about 10 seconds)...")
+@st.cache_data(show_spinner="Running backtest on every real final (a few minutes)...")
 def get_backtest():
+    # backtest.py saves its results; reading them keeps the site fast (a full
+    # run takes minutes). Re-run backtest.py and commit the CSV after changes.
+    if os.path.exists("backtest_results.csv"):
+        return pd.read_csv("backtest_results.csv", parse_dates=["date"])
     np.random.seed(0)
     return run_backtest(get_data())
 
