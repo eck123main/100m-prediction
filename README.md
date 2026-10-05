@@ -10,6 +10,13 @@ result rows scraped from worldathletics.org, through September 2026.
 py -3.14 predict.py "Noah Lyles" "Kishane Thompson" "Fred Kerley" "Akani Simbine"
 ```
 
+Or fetch the field from a worldathletics.org race page, optionally replaying
+a past race using only data from before it:
+
+```
+py -3.14 predict.py --startlist "<race or meeting URL>" [--before 2025-09-13]
+```
+
 Prints each athlete's win probability plus the numbers behind it (recency-
 weighted time, finish rate, race count, Elo rating). Names are matched
 case-insensitively; anyone the model has no usable data for is listed
@@ -86,8 +93,8 @@ the model's misses had the actual winner ranked in its own top 2.
   against the live worldathletics.org source — these are genuinely published
   there as-is (likely a DNF/injury/fall coded as a numeric mark instead of a
   DNF flag), not a scraper parsing bug. Filtered to NaN in `features.py`.
-- No automated way to fetch an upcoming race's start list — the field has
-  to be typed in by hand (see Quick start above).
+- `--startlist` is verified on championship pages; on Diamond League /
+  hub pages the pre-race start-list format hasn't been seen live yet.
 - Multi-day championships: every round of a hub-format meeting carries the
   meeting's start date, so heats/semis of the same meeting aren't used to
   predict its final (conservative, not a leak).

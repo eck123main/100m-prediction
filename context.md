@@ -29,14 +29,18 @@ Paste this into a new conversation to resume work on this project.
 
 ### Suggested next steps
 
-1. **Elo from heats is noisy.** Standalone Elo accuracy dipped (37.8% ->
-   34.9%) once heats became separate rated races, since athletes ease off
-   in heats. Try weighting Elo updates by round (e.g. lower K for heats),
-   or rating finals/semis only, and re-run the backtest.
-2. **Start-list scraping.** The calendar listing has `hasStartlist`; a
-   `predict.py --meet <id>` that pulls the field automatically is the
-   biggest usability win. Wait for the 2027 season to test against a live
-   start list.
+1. ~~Elo from heats is noisy~~ — tested (see 2026-10-05 follow-up below):
+   down-weighting heats/semis or changing K makes no measurable difference
+   at elo_weight=0.1. Not worth more tuning; bigger gains are elsewhere.
+2. **Verify hub start lists live.** `predict.py --startlist URL` is built;
+   the championship format is verified, but the pre-race hub-page
+   `startList` shape is unobserved (WA clears it once results post). Try it
+   on the first 2027 Diamond League meeting and adjust
+   `scraper._hub_start_list_names` if it fails.
+4. **Per-race dates for multi-day meetings.** Hub JSON has a `date` per
+   race (`races[].date`), but rows store the meeting start date. Using the
+   race date would let heats/semis inform that meeting's final. Needs a
+   hub re-scrape (same safe approach as the heat migration).
 3. To add new meetings: query the calendar listing (see the 2026-10-05 log
    below), add URLs to `links.py`, run `py -3.14 collect_data.py --new-only`,
    then `py -3.14 backtest.py` (~15-20 min).
@@ -301,3 +305,16 @@ URL means the meeting has no men's 100m.
 Log-loss (lower better): w=0.0 train 1.804 / test 2.082; w=0.1 1.794 /
 2.011; w=0.3 1.826 / 1.998. Top-1 barely moves; the small Elo weight mainly
 improves calibration.
+
+### Follow-up (same day): Elo round weighting + start lists
+
+- **Elo round weighting**: added `ELO_ROUND_K` (per-round K multiplier) and
+  `compute_elo_history(df, round_k=...)`. Experiment over 8 variants on 295
+  finals: at elo_weight=0.1, train log-loss 1.792-1.794, test 2.010-2.012,
+  top-1 47.1% for all. Standalone Elo top-1 ranged 34.6-37.6% (noise-level
+  at 10% weight). Kept all multipliers at 1.0.
+- **Start lists**: `scraper.fetch_start_list(url)` +
+  `predict.py --startlist URL [--before YYYY-MM-DD]`. Championship
+  `/startlist` pages verified (Tokyo 2025 final replay: Thompson 34% top
+  pick, the actual winner). Hub pages fall back to results entrants after
+  the race; pre-race shape untested.
