@@ -2,7 +2,7 @@
 
 Predicts men's 100m race outcomes from historical World Athletics results
 (dense 2012-2026 coverage, plus every round of every World Championships /
-Olympics back to 1983). ~9,860 result rows scraped from worldathletics.org, through September 2026.
+Olympics back to 1983, plus ~1,150 extra 2024-2026 meets). ~57,000 result rows scraped from worldathletics.org, through September 2026.
 
 ## Quick start: predict an upcoming race
 
@@ -79,7 +79,7 @@ GitHub, click "Create app", pick this repo and `app.py`.
 4. **`backtest.py`** — validates all of the above against ~295 real finals
    (filtered to plausible field sizes), and tunes `elo_weight` with an
    out-of-time split. Run `py -3.14 backtest.py` for the full breakdown
-   (~10 s).
+   (~5 min).
 
 ## Validated accuracy
 
@@ -88,15 +88,16 @@ methodology):
 
 | | Top-1 accuracy | vs. chance |
 |---|---|---|
-| All real finals (622) | 45.8% | ~12% |
-| Excluding cold-start winners* (492) | 57.9% | ~12% |
-| The original 295 elite finals | 49.8% | 12.4% |
+| The original 295 elite finals | 51.2% | 12.4% |
+| All 3,219 finals (incl. NCAA/national/small meets) | 45.7% | ~15% |
+| All finals excluding cold-start winners* (2,530) | 58.0% | ~15% |
 
-The jump to 622 finals comes from 116 extra 2026 meetings (NCAA, area
-championships, national meets) where many winners have no earlier results in
-the data yet. Simply picking the fastest recent adjusted time scores about
-the same top-1; the model's value is in its probabilities (log-loss 1.554 on
-the original 295 finals, down from 1.649).
+Most finals in the backtest are now from the 2024-2026 meets added via athlete
+profiles; 21% of their winners have no earlier results (the data starts in
+2024 for most lower-level athletes). Simply picking the fastest recent
+adjusted time scores about the same top-1; the model's value is in its
+probabilities (log-loss 1.421 on the original 295 finals, down from 1.649
+before the robust spread and the extra 2024-2026 data).
 
 \* cold start = the actual winner had zero prior races in the dataset —
 unpredictable in principle, not a model failure.
@@ -110,7 +111,7 @@ the model's misses had the actual winner ranked in its own top 2.
 
 ## Known limitations
 
-- **Cold start**: ~4% of elite-final winners (21% across all finals incl. small 2026 meets) have zero prior history in the
+- **Cold start**: ~2% of elite-final winners (21% across all finals incl. small 2024-2026 meets) have zero prior history in the
   dataset (debutants, or the first race of an early era) — unpredictable by
   construction.
 - **No start times/splits/lane data** — only finishing time, wind, round,
