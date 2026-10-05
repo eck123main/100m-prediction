@@ -1,8 +1,8 @@
 # 100m Prediction
 
 Predicts men's 100m race outcomes from historical World Athletics results
-(2016-2026, plus scattered championship finals back to 1983). ~5,300 races
-scraped from worldathletics.org.
+(dense 2012-2026 coverage, plus championship finals back to 1983). ~8,160
+result rows scraped from worldathletics.org, through September 2026.
 
 ## Quick start: predict an upcoming race
 
@@ -22,7 +22,9 @@ on this machine is 3.8 with pandas 2.0.3, which will crash — use `py -3.14`
 ## How it works
 
 1. **`scraper.py` / `links.py` / `collect_data.py`** — scrape race results
-   from worldathletics.org into `100m_races_dataset.csv`.
+   from worldathletics.org into `100m_races_dataset.csv`. After adding new
+   meetings to `links.py`, run `py -3.14 collect_data.py --new-only` — it
+   scrapes only URLs not yet in the CSV and never drops existing rows.
 2. **`features.py`** — turn raw race rows into leak-free, point-in-time
    athlete stats:
    - Wind-adjusts every time via a within-athlete regression coefficient
@@ -32,7 +34,8 @@ on this machine is 3.8 with pandas 2.0.3, which will crash — use `py -3.14`
    - Reliability: a Beta-shrunk finish rate (DNF/DQ/DNS history), so a
      handful of races doesn't read as a false 0% or 100%.
    - Elo rating: sequential head-to-head rating from real single-race
-     pairwise "who finished ahead of whom" results.
+     pairwise "who finished ahead of whom" results. A race is one
+     `(source_url, round, heat)` group, so each heat is rated separately.
    - `compute_stats_before(cutoff_date, df)` computes all of the above using
      only data strictly before `cutoff_date` — this is what makes backtesting
      honest (no race is ever used to predict itself).
@@ -44,12 +47,12 @@ on this machine is 3.8 with pandas 2.0.3, which will crash — use `py -3.14`
      finishing at all.
    - `elo_win_probs()` — win probability from head-to-head Elo alone.
    - `predict_race_full()` — **the recommended entry point.** Blends
-     Monte Carlo and Elo at a 70/30 weighting (Monte Carlo/Elo), which
-     backtested better than 50/50 or 70/30 Elo-favored splits.
-4. **`backtest.py`** — validates all of the above against ~199 real finals
-   (filtered to plausible field sizes; some raw "final" URLs are actually
-   mislabeled multi-heat dumps). Run `py -3.14 backtest.py` for the full
-   breakdown.
+     Monte Carlo and Elo at a 90/10 weighting (Monte Carlo/Elo), chosen by
+     log-loss on pre-2022 finals over a 0-1 grid and checked on 2022+.
+4. **`backtest.py`** — validates all of the above against ~295 real finals
+   (filtered to plausible field sizes), and tunes `elo_weight` with an
+   out-of-time split. Run `py -3.14 backtest.py` for the full breakdown
+   (~15-20 min).
 
 ## Validated accuracy
 
@@ -58,8 +61,9 @@ methodology):
 
 | | Top-1 accuracy | vs. chance |
 |---|---|---|
-| All real finals (199) | 42.7% | 12.3% |
-| Excluding cold-start winners* | 46.4% | 12.1% |
+| All real finals (295) | 47.1% | 12.4% |
+| Excluding cold-start winners* (268) | 51.9% | 12.2% |
+| 2016+ finals (235) | 43.8% | 12.5% |
 
 \* cold start = the actual winner had zero prior races in the dataset —
 unpredictable in principle, not a model failure.
@@ -73,7 +77,7 @@ the model's misses had the actual winner ranked in its own top 2.
 
 ## Known limitations
 
-- **Cold start**: ~8% of race winners have zero prior history in the
+- **Cold start**: ~9% of race winners have zero prior history in the
   dataset (debutants, or the first race of an early era) — unpredictable by
   construction.
 - **No start times/splits/lane data** — only finishing time, wind, round,
@@ -84,8 +88,6 @@ the model's misses had the actual winner ranked in its own top 2.
   DNF flag), not a scraper parsing bug. Filtered to NaN in `features.py`.
 - No automated way to fetch an upcoming race's start list — the field has
   to be typed in by hand (see Quick start above).
-- On hub pages, individual heat *groups* within the same round (e.g. Heat 1
-  vs Heat 2) aren't distinguished in the stored data — they all share the
-  same `round` value. If two small heats' combined size lands inside the
-  "real race" field-size window used for Elo, it could credit a made-up
-  head-to-head between athletes who actually raced in different heats.
+- Multi-day championships: every round of a hub-format meeting carries the
+  meeting's start date, so heats/semis of the same meeting aren't used to
+  predict its final (conservative, not a leak).

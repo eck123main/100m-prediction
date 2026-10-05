@@ -97,15 +97,13 @@ def blend_win_probs(mc_probs, elo_probs, elo_weight=0.5):
     return (blended / blended.sum()).sort_values(ascending=False)
 
 
-def predict_race_full(athlete_names, stats_table, n_simulations=10000, min_races=1, elo_weight=0.3):
+def predict_race_full(athlete_names, stats_table, n_simulations=10000, min_races=1, elo_weight=0.1):
     """Recommended prediction: blend the time-based Monte Carlo simulation
-    with head-to-head Elo. elo_weight=0.3 backtested best among {0.3, 0.5,
-    0.7} in backtest.py (re-checked after the scraper fixes that recovered
-    heats/semi-final data — 0.3 now beats 0.5 and 0.7 in every slice tested,
-    where 0.5 previously won on the smaller pre-fix dataset). Elo alone
-    underperforms the time-based model (weaker standalone signal), but
-    blended in it beats pure Monte Carlo in every slice tested, catching
-    close/uncertain races a solo recency-weighted time average misses."""
+    with head-to-head Elo. elo_weight=0.1 was chosen in backtest.py by
+    log-loss on finals before 2022 over a 0-1 grid, and holds up on 2022+
+    finals (2026-10 rebuild: 295 finals, heats now rated as separate races).
+    Elo alone is a weaker signal than the time model; a small weight helps
+    probability calibration, larger weights hurt it."""
     mc_probs = simulate_race(athlete_names, stats_table, n_simulations=n_simulations, min_races=min_races)
     elo_probs = elo_win_probs(athlete_names, stats_table)
     return blend_win_probs(mc_probs, elo_probs, elo_weight=elo_weight)
