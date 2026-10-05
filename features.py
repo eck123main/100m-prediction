@@ -243,41 +243,38 @@ def compute_reliability_before(cutoff_date, df, prior_strength=8):
     alpha0 = prior_rate * prior_strength
     beta0 = (1 - prior_rate) * prior_strength
 
-    def reliability(group):
-        starts = len(group)
-        finishes = group["time"].notna().sum()
-        finish_rate = (finishes + alpha0) / (starts + alpha0 + beta0)
-        return pd.Series({"starts": starts, "finishes": finishes, "finish_rate": finish_rate})
+    g = history.groupby("ATHLETE")["time"]
+    starts = g.size()
+    finishes = g.count()  # non-NaN times
+    return pd.DataFrame({
+        "starts": starts,
+        "finishes": finishes,
+        "finish_rate": (finishes + alpha0) / (starts + alpha0 + beta0),
+    })
 
-    return history.groupby("ATHLETE").apply(reliability, include_groups=False)
 
-
-def compute_stats_before(cutoff_date, df):
+def compute_stats_before(cutoff_date, df, half_life_days=HALF_LIFE_DAYS):
     """Recency-weighted stats using only races strictly before cutoff_date.
-    Prevents leaking a target race's own result into an athlete's 'known form'."""
+    Prevents leaking a target race's own result into an athlete's 'known form'.
+    Vectorized (one groupby, no per-athlete Python) — it runs once per race
+    in the backtest."""
     history = df[df["date"] < cutoff_date]
     history.attrs = {}  # see compute_reliability_before for why
     if len(history) == 0:
         return pd.DataFrame(columns=["weighted_avg_time", "races_used", "consistency",
                                       "finish_rate", "starts", "finishes", "elo"])
 
-    def recency_weighted_avg(group):
-        valid = group.dropna(subset=["adj_time", "date"])
-        if len(valid) == 0:
-            return pd.Series({"weighted_avg_time": np.nan, "races_used": 0, "consistency": np.nan})
+    valid = history.dropna(subset=["adj_time", "date"])
+    weights = 0.5 ** ((cutoff_date - valid["date"]).dt.days / half_life_days)
+    g = valid.assign(w=weights, wt=weights * valid["adj_time"]).groupby("ATHLETE")
+    athletes = pd.Index(sorted(history["ATHLETE"].dropna().unique()), name="ATHLETE")
+    stats = pd.DataFrame({
+        "weighted_avg_time": g["wt"].sum() / g["w"].sum(),
+        "races_used": g.size().astype(float),
+        "consistency": g["adj_time"].std(),
+    }).reindex(athletes)
+    stats["races_used"] = stats["races_used"].fillna(0.0)
 
-        days_ago = (cutoff_date - valid["date"]).dt.days
-        weights = 0.5 ** (days_ago / HALF_LIFE_DAYS)
-        weighted_avg = (valid["adj_time"] * weights).sum() / weights.sum()
-        consistency = valid["adj_time"].std()
-
-        return pd.Series({
-            "weighted_avg_time": weighted_avg,
-            "races_used": len(valid),
-            "consistency": consistency
-        })
-
-    stats = history.groupby("ATHLETE").apply(recency_weighted_avg, include_groups=False)
     reliability = compute_reliability_before(cutoff_date, df)
     stats = stats.join(reliability[["finish_rate", "starts", "finishes"]])
 
