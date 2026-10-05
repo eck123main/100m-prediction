@@ -1,7 +1,13 @@
 """
 Run this file directly to (re)build 100m_races_dataset.csv from scratch:
     python collect_data.py
+
+Or, to only scrape links.py URLs that aren't in the CSV yet (fast, and never
+touches existing rows — use this after adding new meetings to links.py):
+    python collect_data.py --new-only
 """
+
+import sys
 
 import pandas as pd
 from scraper import (
@@ -131,5 +137,39 @@ def main():
     print(f"Saved {len(combined)} total rows to {CSV_PATH}")
 
 
+def main_new_only():
+    """Scrape only the links.py URLs with no rows in the CSV yet, and append.
+
+    Unlike main(), existing rows are never dropped, so a transient fetch
+    failure can't delete previously-scraped data. Skips Diamond League index
+    discovery and old-style round-variant expansion (both only apply to
+    historical meetings already in the dataset)."""
+    existing = pd.read_csv(CSV_PATH)
+    have = set(existing["source_url"].dropna())
+
+    def new(urls):
+        return [u for u in urls if u not in have]
+
+    flat_urls = new(CHAMPIONSHIP_URLS + CONTINENTAL_TOUR_URLS + MANUAL_DIAMOND_LEAGUE_URLS)
+    hub_urls = new(DIAMOND_LEAGUE_HUB_URLS + OTHER_HUB_URLS + CONTINENTAL_TOUR_HUB_URLS)
+    print(f"=== {len(flat_urls)} new flat-format URLs, {len(hub_urls)} new hub-format URLs ===")
+    flat_df = scrape_url_list(flat_urls, scrape_fn=scrape_race)
+    rounds_df = scrape_url_list(
+        [v for u in flat_urls for v in generate_round_variants(u)], scrape_fn=scrape_race
+    )
+    hub_df = scrape_url_list(hub_urls, scrape_fn=scrape_hub_race)
+
+    new_rows = pd.concat([flat_df, rounds_df, hub_df], ignore_index=True)
+    if new_rows.empty:
+        print("Nothing new scraped; CSV unchanged.")
+        return
+    combined = pd.concat([existing, new_rows], ignore_index=True).drop_duplicates()
+    combined.to_csv(CSV_PATH, index=False)
+    print(f"Added {len(combined) - len(existing)} rows; saved {len(combined)} total rows to {CSV_PATH}")
+
+
 if __name__ == "__main__":
-    main()
+    if "--new-only" in sys.argv:
+        main_new_only()
+    else:
+        main()
