@@ -125,6 +125,9 @@ DIAMOND_LEAGUE_HUB_URLS = [
     "https://worldathletics.org/competitions/diamond-league/calendar-results/7203937/result",  # Bauhaus-Galan 2025
     "https://worldathletics.org/competitions/diamond-league/calendar-results/7203942/result",  # Herculis Monaco 2025
     "https://worldathletics.org/competitions/diamond-league/calendar-results/7214015/result",  # Doha Meeting 2026
+    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214026/result",  # Silesia Memorial 2026
+    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214029/result",  # Memorial van Damme (DL Final) 2026
+    # Lausanne (7214027) and Zurich (7214028) 2026 had no Diamond Discipline men's 100m.
 
     # Add more here as you find them — one per meeting, any year 2022-2026
 ]
@@ -197,6 +200,27 @@ CONTINENTAL_TOUR_HUB_URLS = [
     "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7230225/result",  # Paavo Nurmi Games 2026
     "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7231211/result",  # FBK Games 2026
     "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7214030/result",  # Gyulai Istvan Memorial 2026
+
+    # Aug-Sep 2026, found via the calendar-results listing (competitionGroupId=3773).
+    # Not listed (no elite men's 100m on the page): Monaco Athletics Festival,
+    # Stumptown Twilight, Golden Sand, Tyczka na Molo, Aosta, Goteborg, Cheb,
+    # Dinamo Zrinjevac, ATHLOS London, Yogibo Challenge Cup.
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7235002/result",  # IFAM Oordegem 2026
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7235369/result",  # Espoo Motonet GP 2026
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7235041/result",  # Atleticky Mitink Rieter 2026
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7237534/result",  # Felix Sanchez Classic 2026
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7238146/result",  # Silver CT Bhubaneswar 2026
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7235055/result",  # Wieslaw Maniak Memorial 2026
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7234838/result",  # GalAthletics Bellinzona 2026
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7234714/result",  # ISTAF Berlin 2026
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7234691/result",  # Grand Prix Brescia 2026
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7235056/result",  # Ludwichowski Memorial 2026
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7235074/result",  # Serbia Athletics Meeting 2026
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7234124/result",  # Oman Athletics Grand Prix 2026
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7234845/result",  # Palio Citta della Quercia 2026
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7245567/result",  # CT Challenger Pedro Galvez Velarde 2026 (Lima)
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7245568/result",  # CT Challenger Maria Letts Colmenares 2026 (Lima)
+    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7235127/result",  # 72nd ORLEN Janusz Kusocinski Memorial 2026
 ]
 
 # National championships with pro/Olympic-level 100m fields (USATF Outdoor
@@ -298,6 +322,24 @@ OTHER_HUB_URLS = [
     "https://worldathletics.org/competition/calendar-results/results/7120237?eventId=10229630",  # Japan Championships 2018 (Yamaguchi)
     "https://worldathletics.org/competition/calendar-results/results/7194465?eventId=10229630",  # Japanese Championships 2023 (Osaka)
     "https://worldathletics.org/competition/calendar-results/results/7224447?eventId=10229630",  # Japanese Championships 2025 (Tokyo)
+
+    # --- 2026 major/area championships & games (Jul-Sep), via calendar-results listing ---
+    "https://worldathletics.org/competition/calendar-results/results/7187518?eventId=10229630",  # Commonwealth Games 2026 (Glasgow)
+    "https://worldathletics.org/competition/calendar-results/results/7192415?eventId=10229630",  # European Championships 2026 (Birmingham)
+    "https://worldathletics.org/competition/calendar-results/results/7212925?eventId=10229630",  # World Athletics Ultimate Championship 2026 (Budapest)
+    "https://worldathletics.org/competition/calendar-results/results/7176091?eventId=10229630",  # Asian Games 2026 (Nagoya)
+    "https://worldathletics.org/competition/calendar-results/results/7233796?eventId=10229630",  # CAC Games 2026 (Santo Domingo)
+    "https://worldathletics.org/competition/calendar-results/results/7233421?eventId=10229630",  # Mediterranean Games 2026 (Taranto)
+    "https://worldathletics.org/competition/calendar-results/results/7246486?eventId=10229630",  # South American Games 2026 (Santa Fe)
+    "https://worldathletics.org/competition/calendar-results/results/7235652?eventId=10229630",  # Central Asian Open Championships 2026 (Tashkent)
+    "https://worldathletics.org/competition/calendar-results/results/7237754?eventId=10229630",  # Finnkampen 2026 (Helsinki)
+
+    # --- other 2026 national championships (Aug-Sep) ---
+    "https://worldathletics.org/competition/calendar-results/results/7243221?eventId=10229630",  # Chinese Championships 2026 (Quzhou)
+    "https://worldathletics.org/competition/calendar-results/results/7244895?eventId=10229630",  # Argentinian Championships 2026 (Rosario)
+    "https://worldathletics.org/competition/calendar-results/results/7246255?eventId=10229630",  # Iranian Championships 2026 (Shiraz)
+    "https://worldathletics.org/competition/calendar-results/results/7245331?eventId=10229630",  # Sri Lankan Championships 2026 (Diyagama)
+    "https://worldathletics.org/competition/calendar-results/results/7245433?eventId=10229630",  # Bolivian Championships 2026 (Cochabamba)
 ]
 
 # Known gaps not yet found (not confirmed absent from worldathletics.org, just not
