@@ -129,7 +129,10 @@ if __name__ == "__main__":
         names += fetch_start_list(args.startlist)
     if not names:
         parser.error("give athlete names and/or --startlist URL")
-    field = list(dict.fromkeys(name.strip().title() for name in names))
+    from features import ATHLETE_ALIASES
+    field = list(dict.fromkeys(
+        ATHLETE_ALIASES.get(name.strip().title(), name.strip().title()) for name in names
+    ))
 
     df = load_clean_data()
     if args.before:

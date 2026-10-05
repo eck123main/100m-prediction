@@ -132,12 +132,15 @@ def scrape_race(url, known_venue=None):
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    heading = soup.find(string=lambda s: s and "Wind" in s)
-    wind = None
-    if heading:
-        match = re.search(r"Wind\s*([+-]?\d+\.\d+)", heading)
-        if match:
-            wind = float(match.group(1))
+    # One "Wind +0.8" label per heat table, in page order. When the counts
+    # line up, give each heat its own wind; otherwise fall back to the first
+    # label for every row (all a single-table final page ever has).
+    winds = [float(m.group(1)) for s in soup.find_all(string=lambda s: s and "Wind" in s)
+             if (m := re.match(r"\s*Wind\s*([+-]?\d+\.\d+)", s))]
+    if len(winds) == len(results_tables):
+        wind = results_table["heat"].map(dict(enumerate(winds, start=1)))
+    else:
+        wind = winds[0] if winds else None
 
     date = None
     for meta in soup.find_all("meta"):

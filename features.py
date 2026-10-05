@@ -29,6 +29,16 @@ RACE_KEYS = ["source_url", "round", "heat"]
 MIN_REAL_RACE_SIZE = 3
 MAX_REAL_RACE_SIZE = 10
 
+# The same athlete published under different names across pages/years
+# (title-cased form -> canonical form, WA's current spelling). Found by
+# matching first name + surname + country; only clear same-person cases.
+ATHLETE_ALIASES = {
+    "Marvin Bracy": "Marvin Bracy-Williams",
+    "Jeff Demps": "Jeffery Demps",
+    "Ngoni Makusha": "Ngonidzashe Makusha",
+    "Deondre Batson": "Diondre Batson",
+}
+
 BASE_ELO = 1500
 ELO_K = 24
 # Multiplier on ELO_K per round, in case heats (where athletes ease off once
@@ -42,7 +52,7 @@ ELO_ROUND_K = {"final": 1.0, "semi-final": 1.0, "heats": 1.0}
 def load_clean_data(csv_path="100m_races_dataset.csv"):
     """Load the dataset and clean names/dates/round so grouping works correctly."""
     df = pd.read_csv(csv_path)
-    df["ATHLETE"] = df["ATHLETE"].str.strip().str.title()
+    df["ATHLETE"] = df["ATHLETE"].str.strip().str.title().replace(ATHLETE_ALIASES)
     df["date"] = pd.to_datetime(df["date"], format="%d/%m/%Y %H:%M:%S", errors="coerce")
 
     implausible = (df["time"] < MIN_PLAUSIBLE_TIME) | (df["time"] > MAX_PLAUSIBLE_TIME)
