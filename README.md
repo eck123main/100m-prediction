@@ -30,6 +30,20 @@ separately at the bottom rather than silently dropped.
 on this machine is 3.8 with pandas 2.0.3, which will crash — use `py -3.14`
 (or another interpreter with a current pandas) explicitly, as above.
 
+## Website
+
+```
+py -3.14 -m pip install -r requirements.txt
+py -3.14 -m streamlit run app.py
+```
+
+Opens at http://localhost:8501 with three tabs: predict a race (pick athletes
+or paste a World Athletics link), replay any past final leak-free, and the
+model's track record (accuracy, calibration, live predictions).
+
+To put it online for free: push to GitHub, sign in at share.streamlit.io with
+GitHub, click "Create app", pick this repo and `app.py`.
+
 ## How it works
 
 1. **`scraper.py` / `links.py` / `collect_data.py`** — scrape race results
