@@ -19,7 +19,9 @@ py -3.14 predict.py --startlist "<race or meeting URL>" [--before 2025-09-13]
 
 Add `--log` to save the prediction to `predictions_log.csv`; after the race,
 `py -3.14 score_predictions.py` grades every logged prediction against the
-actual result.
+actual result. Add bookmaker decimal odds with
+`--odds "Oblique Seville=2.5,Noah Lyles=3.2"` and the scorer compares the
+model against the betting market (margin removed) on the same races.
 
 Prints each athlete's win probability plus the numbers behind it (recency-
 weighted time, finish rate, race count, Elo rating). Names are matched

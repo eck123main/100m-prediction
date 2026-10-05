@@ -111,9 +111,27 @@ def predict_race_full(athlete_names, stats_table, n_simulations=10000, min_races
     return blend_win_probs(mc_probs, elo_probs, elo_weight=elo_weight)
 
 
-def log_prediction(log_path, probs, field, race_url, data_through):
+def parse_odds(text):
+    """'Name=2.5, Other Name=3.1' (decimal odds) -> bookmaker win probabilities.
+    Implied probability is 1/odds; dividing by their sum removes the
+    bookmaker's margin (overround) so they're comparable to the model's."""
+    from features import ATHLETE_ALIASES
+    odds = {}
+    for part in text.split(","):
+        if not part.strip():
+            continue
+        name, _, value = part.rpartition("=")
+        name = name.strip().title()
+        odds[ATHLETE_ALIASES.get(name, name)] = float(value)
+    implied = pd.Series({n: 1 / o for n, o in odds.items()})
+    return odds, implied / implied.sum()
+
+
+def log_prediction(log_path, probs, field, race_url, data_through, odds=None):
     """Append one row per athlete in the field (unscored athletes get 0) so
-    the prediction can be graded later against the actual result."""
+    the prediction can be graded later against the actual result. If
+    bookmaker odds are given, their margin-free probabilities are logged
+    alongside so score_predictions.py can compare model vs market."""
     import os
     import subprocess
     from datetime import datetime, timezone
@@ -132,6 +150,10 @@ def log_prediction(log_path, probs, field, race_url, data_through):
         "data_through": str(data_through),
         "model_commit": commit,
     })
+    if odds is not None:
+        raw, book = odds
+        rows["book_odds"] = [raw.get(a) for a in field]
+        rows["book_prob"] = [float(book.get(a, 0.0)) for a in field]
     rows.to_csv(log_path, mode="a", header=not os.path.exists(log_path), index=False)
 
 
@@ -147,6 +169,9 @@ if __name__ == "__main__":
                              "instead of typing names")
     parser.add_argument("--before", metavar="YYYY-MM-DD",
                         help="only use results before this date (replay a past race leak-free)")
+    parser.add_argument("--odds", metavar='"NAME=ODDS,..."',
+                        help='bookmaker decimal odds to log for comparison, e.g. '
+                             '"Oblique Seville=2.5,Noah Lyles=3.2"')
     parser.add_argument("--log", nargs="?", const="predictions_log.csv", metavar="CSV",
                         help="append this prediction to a log (default predictions_log.csv) "
                              "so score_predictions.py can grade it once results are in")
@@ -185,7 +210,12 @@ if __name__ == "__main__":
               f"races={int(row['races_used'])}   elo={row['elo']:.0f}")
 
     if args.log:
-        log_prediction(args.log, probs, field, args.startlist, data_through)
+        odds = parse_odds(args.odds) if args.odds else None
+        if odds is not None:
+            unknown = set(odds[0]) - set(field)
+            if unknown:
+                print(f"Warning: odds given for athletes not in the field: {sorted(unknown)}")
+        log_prediction(args.log, probs, field, args.startlist, data_through, odds)
         print(f"Logged to {args.log}")
 
     unmatched = set(field) - set(probs.index)
