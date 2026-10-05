@@ -44,92 +44,153 @@ CHAMPIONSHIP_URLS = [
 ]
 
 # 2022-2026 Diamond League meetings — found manually by clicking through
-# in browser (the "calendar-results/{id}/result" hub format). Each page
-# contains ALL events for that meeting, including Men's 100m.
+# in browser. Each page contains ALL events for that meeting, including
+# Men's 100m. Always use the generic competition/calendar-results/results/{id}
+# form: the competitions/diamond-league/calendar-results/{id}/result form of
+# the same page sometimes omits sections (see scraper.scrape_hub_race).
 # Note: scrape_hub_race() automatically skips any meeting with no Men's
 # 100m section (e.g. field-events-only days), so duplicates/misses here
 # just fail cleanly rather than breaking anything.
 DIAMOND_LEAGUE_HUB_URLS = [
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214016/result",  # Shaoxing/Keqiao 2026
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214017/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214018/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214019/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214020/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214021/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214022/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214023/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214024/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214025/result",
+    "https://worldathletics.org/competition/calendar-results/results/7214016?eventId=10229630",  # Shaoxing/Keqiao 2026
+    "https://worldathletics.org/competition/calendar-results/results/7214017?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7214018?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7214019?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7214020?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7214021?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7214022?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7214023?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7214024?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7214025?eventId=10229630",
 
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7199682/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7199683/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7199684/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7199685/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7199686/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7199680/result",
+    "https://worldathletics.org/competition/calendar-results/results/7199682?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7199683?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7199684?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7199685?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7199686?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7199680?eventId=10229630",
 
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7203938/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7203939/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7203940/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7203941/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7203943/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7203944/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7203816/result",
+    "https://worldathletics.org/competition/calendar-results/results/7203938?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7203939?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7203940?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7203941?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7203943?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7203944?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7203816?eventId=10229630",
 
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174050/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174051/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174052/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174053/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174054/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174056/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174057/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174058/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174059/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174060/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174061/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174062/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174063/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174658/result",
+    "https://worldathletics.org/competition/calendar-results/results/7174050?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7174051?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7174052?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7174053?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7174054?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7174056?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7174057?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7174058?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7174059?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7174060?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7174061?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7174062?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7174063?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7174658?eventId=10229630",
 
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7202834/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7172922/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7172925/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7172926/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7172927/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7172928/result",
+    "https://worldathletics.org/competition/calendar-results/results/7202834?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7172922?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7172925?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7172926?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7172927?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7172928?eventId=10229630",
 
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7155407/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7155467/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7154214/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7154215/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7154216/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7154217/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7154228/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7147636/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7147656/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7190105/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7153961/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7153964/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7153965/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7153966/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7153967/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7153968/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7153970/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7153972/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7153974/result",
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7153975/result",
+    "https://worldathletics.org/competition/calendar-results/results/7155407?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7155467?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7154214?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7154215?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7154216?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7154217?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7154228?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7147636?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7147656?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7190105?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7153961?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7153964?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7153965?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7153966?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7153967?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7153968?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7153970?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7153972?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7153974?eventId=10229630",
+    "https://worldathletics.org/competition/calendar-results/results/7153975?eventId=10229630",
 
     # Found via calendar-results discovery (competitionGroupId=627) — gaps versus the list above:
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7153971/result",  # Herculis Monaco 2022
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7174055/result",  # Prefontaine Classic 2024
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7203937/result",  # Bauhaus-Galan 2025
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7203942/result",  # Herculis Monaco 2025
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214015/result",  # Doha Meeting 2026
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214026/result",  # Silesia Memorial 2026
-    "https://worldathletics.org/competitions/diamond-league/calendar-results/7214029/result",  # Memorial van Damme (DL Final) 2026
+    "https://worldathletics.org/competition/calendar-results/results/7153971?eventId=10229630",  # Herculis Monaco 2022
+    "https://worldathletics.org/competition/calendar-results/results/7174055?eventId=10229630",  # Prefontaine Classic 2024
+    "https://worldathletics.org/competition/calendar-results/results/7203937?eventId=10229630",  # Bauhaus-Galan 2025
+    "https://worldathletics.org/competition/calendar-results/results/7203942?eventId=10229630",  # Herculis Monaco 2025
+    "https://worldathletics.org/competition/calendar-results/results/7214015?eventId=10229630",  # Doha Meeting 2026
+    "https://worldathletics.org/competition/calendar-results/results/7214026?eventId=10229630",  # Silesia Memorial 2026
+    "https://worldathletics.org/competition/calendar-results/results/7214029?eventId=10229630",  # Memorial van Damme (DL Final) 2026
     # Lausanne (7214027) and Zurich (7214028) 2026 had no Diamond Discipline men's 100m.
 
-    # Add more here as you find them — one per meeting, any year 2022-2026
+    # 2012-2015 meetings, from the calendar-results listing (competitionGroupId=627).
+    # Fills the gap between the old-style 2016+ pages and championship-only coverage.
+    "https://worldathletics.org/competition/calendar-results/results/7033722?eventId=10229630",  # Doha IAAF Diamond League Meeting (2012-05-11)
+    "https://worldathletics.org/competition/calendar-results/results/7033723?eventId=10229630",  # Shanghai Samsung Diamond League (2012-05-19)
+    "https://worldathletics.org/competition/calendar-results/results/7033724?eventId=10229630",  # Roma Golden Gala (2012-05-31)
+    "https://worldathletics.org/competition/calendar-results/results/7033725?eventId=10229630",  # Eugene Prefontaine Classic (2012-06-01)
+    "https://worldathletics.org/competition/calendar-results/results/7033726?eventId=10229630",  # Oslo ExxonMobil Bislett Games (2012-06-07)
+    "https://worldathletics.org/competition/calendar-results/results/7033727?eventId=10229630",  # New York adidas Grand Prix (2012-06-09)
+    "https://worldathletics.org/competition/calendar-results/results/7033728?eventId=10229630",  # Paris Meeting AREVA (2012-07-06)
+    "https://worldathletics.org/competition/calendar-results/results/7033729?eventId=10229630",  # Crystal Palace Aviva London Grand Prix (2012-07-13)
+    "https://worldathletics.org/competition/calendar-results/results/7033730?eventId=10229630",  # Monaco Herculis (2012-07-20)
+    "https://worldathletics.org/competition/calendar-results/results/7033731?eventId=10229630",  # Stockholm DN Galan (2012-08-17)
+    "https://worldathletics.org/competition/calendar-results/results/7033732?eventId=10229630",  # Athletissima Lausanne (2012-08-23)
+    "https://worldathletics.org/competition/calendar-results/results/7033733?eventId=10229630",  # Birmingham Aviva Grand Prix (2012-08-26)
+    "https://worldathletics.org/competition/calendar-results/results/7033734?eventId=10229630",  # Weltklasse Zürich (2012-08-29)
+    "https://worldathletics.org/competition/calendar-results/results/7033735?eventId=10229630",  # Bruxelles Memorial Van Damme (2012-09-07)
+    "https://worldathletics.org/competition/calendar-results/results/7049151?eventId=10229630",  # Doha IAAF Diamond League Meeting (2013-05-10)
+    "https://worldathletics.org/competition/calendar-results/results/7049149?eventId=10229630",  # Shanghai IAAF Diamond League Meeting (2013-05-18)
+    "https://worldathletics.org/competition/calendar-results/results/7049152?eventId=10229630",  # New York adidas Grand Prix (2013-05-25)
+    "https://worldathletics.org/competition/calendar-results/results/7049155?eventId=10229630",  # Eugene Prefontaine Classic (2013-05-31)
+    "https://worldathletics.org/competition/calendar-results/results/7049136?eventId=10229630",  # Roma Golden Gala (2013-06-06)
+    "https://worldathletics.org/competition/calendar-results/results/7049154?eventId=10229630",  # Oslo ExxonMobil Bislett Games (2013-06-13)
+    "https://worldathletics.org/competition/calendar-results/results/7049140?eventId=10229630",  # Birmingham Sainsbury's Grand Prix (2013-06-30)
+    "https://worldathletics.org/competition/calendar-results/results/7049139?eventId=10229630",  # Athletissima Lausanne (2013-07-04)
+    "https://worldathletics.org/competition/calendar-results/results/7049153?eventId=10229630",  # Paris Meeting AREVA (2013-07-06)
+    "https://worldathletics.org/competition/calendar-results/results/7049145?eventId=10229630",  # Monaco Herculis (2013-07-19)
+    "https://worldathletics.org/competition/calendar-results/results/7049137?eventId=10229630",  # London Sainsbury's Anniversary Games (2013-07-26)
+    "https://worldathletics.org/competition/calendar-results/results/7049138?eventId=10229630",  # Stockholm DN Galan (2013-08-22)
+    "https://worldathletics.org/competition/calendar-results/results/7049156?eventId=10229630",  # Weltklasse Zürich (2013-08-28)
+    "https://worldathletics.org/competition/calendar-results/results/7049141?eventId=10229630",  # Bruxelles Memorial Van Damme (2013-09-06)
+    "https://worldathletics.org/competition/calendar-results/results/7065889?eventId=10229630",  # Doha IAAF Diamond League (2014-05-09)
+    "https://worldathletics.org/competition/calendar-results/results/7065890?eventId=10229630",  # Shanghai Golden Grand Prix (2014-05-18)
+    "https://worldathletics.org/competition/calendar-results/results/7065891?eventId=10229630",  # Eugene Prefontaine Classic (2014-05-30)
+    "https://worldathletics.org/competition/calendar-results/results/7065892?eventId=10229630",  # Roma Golden Gala - Pietro Mennea (2014-06-05)
+    "https://worldathletics.org/competition/calendar-results/results/7065893?eventId=10229630",  # Oslo ExxonMobil Bislett Games (2014-06-11)
+    "https://worldathletics.org/competition/calendar-results/results/7065894?eventId=10229630",  # New York adidas Grand Prix (2014-06-14)
+    "https://worldathletics.org/competition/calendar-results/results/7065895?eventId=10229630",  # Athletissima Lausanne (2014-07-03)
+    "https://worldathletics.org/competition/calendar-results/results/7065896?eventId=10229630",  # Paris Meeting AREVA (2014-07-05)
+    "https://worldathletics.org/competition/calendar-results/results/7065897?eventId=10229630",  # Glasgow British Athletics Grand Prix (2014-07-11)
+    "https://worldathletics.org/competition/calendar-results/results/7065898?eventId=10229630",  # Monaco Herculis (2014-07-18)
+    "https://worldathletics.org/competition/calendar-results/results/7065899?eventId=10229630",  # Stockholm DN Galan (2014-08-21)
+    "https://worldathletics.org/competition/calendar-results/results/7065900?eventId=10229630",  # Birmingham British Athletics Grand Prix (2014-08-24)
+    "https://worldathletics.org/competition/calendar-results/results/7065901?eventId=10229630",  # Weltklasse Zürich (2014-08-28)
+    "https://worldathletics.org/competition/calendar-results/results/7065902?eventId=10229630",  # Bruxelles Memorial Van Damme (2014-09-05)
+    "https://worldathletics.org/competition/calendar-results/results/7078661?eventId=10229630",  # Doha IAAF Diamond League (2015-05-15)
+    "https://worldathletics.org/competition/calendar-results/results/7078665?eventId=10229630",  # Shanghai Golden Grand Prix (2015-05-17)
+    "https://worldathletics.org/competition/calendar-results/results/7078660?eventId=10229630",  # Eugene Prefontaine Classic (2015-05-29)
+    "https://worldathletics.org/competition/calendar-results/results/7078659?eventId=10229630",  # Roma Golden Gala - Pietro Mennea (2015-06-04)
+    "https://worldathletics.org/competition/calendar-results/results/7078666?eventId=10229630",  # Birmingham British Athletics Grand Prix (2015-06-07)
+    "https://worldathletics.org/competition/calendar-results/results/7078658?eventId=10229630",  # Oslo ExxonMobil Bislett Games (2015-06-11)
+    "https://worldathletics.org/competition/calendar-results/results/7078657?eventId=10229630",  # New York adidas Grand Prix (2015-06-13)
+    "https://worldathletics.org/competition/calendar-results/results/7078655?eventId=10229630",  # Paris Meeting AREVA (2015-07-04)
+    "https://worldathletics.org/competition/calendar-results/results/7078656?eventId=10229630",  # Athletissima Lausanne (2015-07-09)
+    "https://worldathletics.org/competition/calendar-results/results/7078654?eventId=10229630",  # Monaco Herculis (2015-07-17)
+    "https://worldathletics.org/competition/calendar-results/results/7078662?eventId=10229630",  # London Sainsbury's Anniversary Games (2015-07-24)
+    "https://worldathletics.org/competition/calendar-results/results/7078653?eventId=10229630",  # Stockholm BAUHAUS Athletics (2015-07-29)
+    "https://worldathletics.org/competition/calendar-results/results/7078663?eventId=10229630",  # Weltklasse Zürich (2015-09-02)
+    "https://worldathletics.org/competition/calendar-results/results/7078664?eventId=10229630",  # Bruxelles Memorial Van Damme (2015-09-11)
+
+    # Add more here as you find them — one per meeting
 ]
 
 
@@ -184,43 +245,43 @@ CONTINENTAL_TOUR_URLS = [
 # same as DIAMOND_LEAGUE_HUB_URLS, since the flat /final/result page 404s for
 # these (the site only generated the JSON hub page for them).
 CONTINENTAL_TOUR_HUB_URLS = [
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7135817/result",  # Kamila Skolimowska Memorial 2019 (Chorzow)
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7138878/result",  # Janusz Kusocinski Memorial 2020 (Chorzow)
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7144851/result",  # Grande Premio Brasil Caixa de Atletismo 2020
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7175595/result",  # 68th ORLEN Janusz Kusocinski Memorial 2022
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7189809/result",  # USATF NYC Grand Prix 2023
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7147650/result",  # 62nd Ostrava Golden Spike 2023
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7201053/result",  # Kip Keino Classic 2024
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7210334/result",  # Jamaica Athletics Invitational Meet 2024
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7205386/result",  # 70th ORLEN Janusz Kusocinski Memorial 2024
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7216820/result",  # Seiko Golden Grand Prix 2025 Tokyo
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7216821/result",  # Kip Keino Classic 2025
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7223459/result",  # Grande Premio Brasil de Atletismo 2025
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7233226/result",  # Kip Keino Classic 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7230225/result",  # Paavo Nurmi Games 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7231211/result",  # FBK Games 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7214030/result",  # Gyulai Istvan Memorial 2026
+    "https://worldathletics.org/competition/calendar-results/results/7135817?eventId=10229630",  # Kamila Skolimowska Memorial 2019 (Chorzow)
+    "https://worldathletics.org/competition/calendar-results/results/7138878?eventId=10229630",  # Janusz Kusocinski Memorial 2020 (Chorzow)
+    "https://worldathletics.org/competition/calendar-results/results/7144851?eventId=10229630",  # Grande Premio Brasil Caixa de Atletismo 2020
+    "https://worldathletics.org/competition/calendar-results/results/7175595?eventId=10229630",  # 68th ORLEN Janusz Kusocinski Memorial 2022
+    "https://worldathletics.org/competition/calendar-results/results/7189809?eventId=10229630",  # USATF NYC Grand Prix 2023
+    "https://worldathletics.org/competition/calendar-results/results/7147650?eventId=10229630",  # 62nd Ostrava Golden Spike 2023
+    "https://worldathletics.org/competition/calendar-results/results/7201053?eventId=10229630",  # Kip Keino Classic 2024
+    "https://worldathletics.org/competition/calendar-results/results/7210334?eventId=10229630",  # Jamaica Athletics Invitational Meet 2024
+    "https://worldathletics.org/competition/calendar-results/results/7205386?eventId=10229630",  # 70th ORLEN Janusz Kusocinski Memorial 2024
+    "https://worldathletics.org/competition/calendar-results/results/7216820?eventId=10229630",  # Seiko Golden Grand Prix 2025 Tokyo
+    "https://worldathletics.org/competition/calendar-results/results/7216821?eventId=10229630",  # Kip Keino Classic 2025
+    "https://worldathletics.org/competition/calendar-results/results/7223459?eventId=10229630",  # Grande Premio Brasil de Atletismo 2025
+    "https://worldathletics.org/competition/calendar-results/results/7233226?eventId=10229630",  # Kip Keino Classic 2026
+    "https://worldathletics.org/competition/calendar-results/results/7230225?eventId=10229630",  # Paavo Nurmi Games 2026
+    "https://worldathletics.org/competition/calendar-results/results/7231211?eventId=10229630",  # FBK Games 2026
+    "https://worldathletics.org/competition/calendar-results/results/7214030?eventId=10229630",  # Gyulai Istvan Memorial 2026
 
     # Aug-Sep 2026, found via the calendar-results listing (competitionGroupId=3773).
     # Not listed (no elite men's 100m on the page): Monaco Athletics Festival,
     # Stumptown Twilight, Golden Sand, Tyczka na Molo, Aosta, Goteborg, Cheb,
     # Dinamo Zrinjevac, ATHLOS London, Yogibo Challenge Cup.
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7235002/result",  # IFAM Oordegem 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7235369/result",  # Espoo Motonet GP 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7235041/result",  # Atleticky Mitink Rieter 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7237534/result",  # Felix Sanchez Classic 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7238146/result",  # Silver CT Bhubaneswar 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7235055/result",  # Wieslaw Maniak Memorial 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7234838/result",  # GalAthletics Bellinzona 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7234714/result",  # ISTAF Berlin 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7234691/result",  # Grand Prix Brescia 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7235056/result",  # Ludwichowski Memorial 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7235074/result",  # Serbia Athletics Meeting 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7234124/result",  # Oman Athletics Grand Prix 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7234845/result",  # Palio Citta della Quercia 2026
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7245567/result",  # CT Challenger Pedro Galvez Velarde 2026 (Lima)
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7245568/result",  # CT Challenger Maria Letts Colmenares 2026 (Lima)
-    "https://worldathletics.org/competitions/world-athletics-continental-tour/calendar-results/7235127/result",  # 72nd ORLEN Janusz Kusocinski Memorial 2026
+    "https://worldathletics.org/competition/calendar-results/results/7235002?eventId=10229630",  # IFAM Oordegem 2026
+    "https://worldathletics.org/competition/calendar-results/results/7235369?eventId=10229630",  # Espoo Motonet GP 2026
+    "https://worldathletics.org/competition/calendar-results/results/7235041?eventId=10229630",  # Atleticky Mitink Rieter 2026
+    "https://worldathletics.org/competition/calendar-results/results/7237534?eventId=10229630",  # Felix Sanchez Classic 2026
+    "https://worldathletics.org/competition/calendar-results/results/7238146?eventId=10229630",  # Silver CT Bhubaneswar 2026
+    "https://worldathletics.org/competition/calendar-results/results/7235055?eventId=10229630",  # Wieslaw Maniak Memorial 2026
+    "https://worldathletics.org/competition/calendar-results/results/7234838?eventId=10229630",  # GalAthletics Bellinzona 2026
+    "https://worldathletics.org/competition/calendar-results/results/7234714?eventId=10229630",  # ISTAF Berlin 2026
+    "https://worldathletics.org/competition/calendar-results/results/7234691?eventId=10229630",  # Grand Prix Brescia 2026
+    "https://worldathletics.org/competition/calendar-results/results/7235056?eventId=10229630",  # Ludwichowski Memorial 2026
+    "https://worldathletics.org/competition/calendar-results/results/7235074?eventId=10229630",  # Serbia Athletics Meeting 2026
+    "https://worldathletics.org/competition/calendar-results/results/7234124?eventId=10229630",  # Oman Athletics Grand Prix 2026
+    "https://worldathletics.org/competition/calendar-results/results/7234845?eventId=10229630",  # Palio Citta della Quercia 2026
+    "https://worldathletics.org/competition/calendar-results/results/7245567?eventId=10229630",  # CT Challenger Pedro Galvez Velarde 2026 (Lima)
+    "https://worldathletics.org/competition/calendar-results/results/7245568?eventId=10229630",  # CT Challenger Maria Letts Colmenares 2026 (Lima)
+    "https://worldathletics.org/competition/calendar-results/results/7235127?eventId=10229630",  # 72nd ORLEN Janusz Kusocinski Memorial 2026
 ]
 
 # National championships with pro/Olympic-level 100m fields (USATF Outdoor

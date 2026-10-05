@@ -199,10 +199,16 @@ def _parse_wind(wind_value):
         return None
 
 
-    # Tiers that exist alongside the elite field on hub pages but should never
-    # be mistaken for it (national champs pages group heats/combined-events/
-    # underage races under these labels rather than "Diamond Discipline").
-SECONDARY_HUB_TIERS = {"Combined Events", "Qualifier Prelims", "U20 Events", "National Events"}
+# Hub-page section titles that hold an elite men's 100m, in order of
+# preference. None = an untitled section, which is how championships and
+# Continental Tour meetings label their main event. "Promotional"/
+# "Invitational" are non-scoring but elite-field 100m races at Diamond League
+# meetings (e.g. Kerley at Silesia 2024). Anything else — "U18/U20/U23
+# Events", "National Events", "Regional Races", "Pre-Programme", "Combined
+# Events", "Qualifier Prelims", one-off exhibitions like "Karsten vs. Mondo"
+# — is deliberately excluded. This used to be a blocklist, which let unseen
+# titles (U18/U23 races, the Warholm-Duplantis exhibition) through.
+ELITE_HUB_TIERS = ["Diamond Discipline", None, "Promotional Events", "Invitational Events"]
 
 
 def scrape_hub_race(url):
@@ -221,7 +227,12 @@ def scrape_hub_race(url):
     labels each section's tier (e.g. "Diamond Discipline" vs "National
     Events" vs "U20 Events"). Diamond League pages label the elite tier
     "Diamond Discipline"; other meetings (e.g. national championships)
-    leave it untitled (eventTitle None) instead, so that's the fallback.
+    leave it untitled (eventTitle None) instead. See ELITE_HUB_TIERS.
+
+    Prefer the generic competition/calendar-results/results/{id} URL: the
+    competitions/diamond-league/... variant of the same page sometimes omits
+    sections (e.g. Zurich 2022/2025 and Lausanne 2025 Diamond Discipline
+    100m finals are only on the generic one).
     """
     resp = fetch(url)
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -234,20 +245,20 @@ def scrape_hub_race(url):
     calendar_results = data["props"]["pageProps"]["calendarEventsResults"]
     competition = calendar_results["competition"]
 
+    # A meeting can have a "Diamond Discipline" section that doesn't include
+    # the men's 100m that year, alongside a Promotional one that does — so
+    # pick the most-preferred tier that actually contains the event.
+    sections_with_100m = [
+        et for et in calendar_results["eventTitles"]
+        if any(e.get("event") == "Men's 100 Metres" for e in et.get("events", []))
+    ]
     main_section = next(
-        (et for et in calendar_results["eventTitles"]
-         if et.get("eventTitle") == "Diamond Discipline"),
+        (et for tier in ELITE_HUB_TIERS for et in sections_with_100m
+         if et.get("eventTitle") == tier),
         None,
     )
     if main_section is None:
-        main_section = next(
-            (et for et in calendar_results["eventTitles"]
-             if et.get("eventTitle") not in SECONDARY_HUB_TIERS
-             and any(e.get("event") == "Men's 100 Metres" for e in et.get("events", []))),
-            None,
-        )
-    if main_section is None:
-        raise ValueError("No elite-tier section on this page")
+        raise ValueError("No elite-tier section with Men's 100 Metres on this page")
 
     event = next(
         (e for e in main_section["events"] if e.get("event") == "Men's 100 Metres"),
