@@ -15,10 +15,12 @@ from backtest import get_real_finals, run_backtest
 from features import ATHLETE_ALIASES, RACE_KEYS, compute_all_time_stats, compute_stats_before, load_clean_data
 from predict import predict_race_full
 
-BLUE = "#2a78d6"
-ORANGE = "#eb6834"
+# Chart colours: validated categorical slots 1-2, with separate steps for the
+# dark theme (both pass the colour-blind and contrast checks for their surface).
+PALETTE = {"light": ("#2a78d6", "#eb6834"), "dark": ("#3987e5", "#d95926")}
 
 st.set_page_config(page_title="100m Predictor", page_icon="🏃", layout="wide")
+BLUE, ORANGE = PALETTE["dark" if st.context.theme.type == "dark" else "light"]
 
 
 @st.cache_resource(show_spinner="Loading race data...")
@@ -191,7 +193,8 @@ with record_tab:
         chart = alt.Chart(long).mark_bar(cornerRadiusEnd=4).encode(
             x=alt.X("bucket:N", title="Model's probability for its pick", sort=None,
                     axis=alt.Axis(labelAngle=0)),
-            xOffset=alt.XOffset("series:N", sort=["Model said", "Actually won"]),
+            xOffset=alt.XOffset("series:N", sort=["Model said", "Actually won"],
+                                scale=alt.Scale(paddingInner=0.08)),  # small gap between the pair
             y=alt.Y("rate:Q", title=None, axis=alt.Axis(format="%")),
             color=alt.Color("series:N", scale=alt.Scale(domain=["Model said", "Actually won"],
                                                         range=[BLUE, ORANGE]),
@@ -200,6 +203,11 @@ with record_tab:
                      alt.Tooltip("rate:Q", format=".0%", title="Rate"), alt.Tooltip("races:Q", title="Races")],
         ).properties(height=280)
         st.altair_chart(chart, width="stretch")
+        with st.expander("Table"):
+            st.dataframe(cal.rename(columns={"bucket": "Model's probability", "predicted": "Model said",
+                                             "actual": "Actually won", "races": "Finals"})
+                         .style.format({"Model said": "{:.0%}", "Actually won": "{:.0%}"}),
+                         hide_index=True, width="stretch")
     with right:
         st.subheader("Accuracy by year")
         st.caption("Share of finals where the model's pick won.")
@@ -214,6 +222,10 @@ with record_tab:
                      alt.Tooltip("races:Q", title="Finals")],
         ).properties(height=280)
         st.altair_chart(chart, width="stretch")
+        with st.expander("Table"):
+            st.dataframe(by_year.rename(columns={"year": "Year", "accuracy": "Picked the winner", "races": "Finals"})
+                         .style.format({"Picked the winner": "{:.0%}", "Year": "{}"}),
+                         hide_index=True, width="stretch")
 
     st.subheader("Live predictions")
     if os.path.exists("predictions_log.csv"):
