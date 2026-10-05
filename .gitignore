@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 backtest_results.csv
 .venv/
+discovered_meets.csv
