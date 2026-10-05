@@ -25,7 +25,7 @@ Paste this into a new conversation to resume work on this project.
 
 - Dataset: 9,861 rows, through 2026-09-23. Dense 2012-2026 plus every round
   of every World Championships/Olympics back to 1983.
-- Backtest (~10 s now): 295 finals, ~50% top-1 vs ~12% chance; log-loss
+- Backtest (~5 min with 57k rows): 295 finals, ~50% top-1 vs ~12% chance; log-loss
   1.649. **Honest caveat:** the naive "fastest adjusted time" pick gets
   ~49%, so the Monte Carlo/Elo layers add calibrated probabilities more than
   extra winners. Half-life 180 days, `elo_weight` 0.1.
@@ -400,3 +400,18 @@ Backtest now takes ~25-30 min.
 
 Next: earlier seasons from athlete profiles (needs WA's client-side API),
 indoor 60m as early-season form, then top-end calibration.
+
+### 2024-2025 seasons via WA's data API (2026-10-05)
+
+- Athlete profiles only server-render the current season; older seasons come
+  from WA's public GraphQL endpoint (`GetSingleCompetitorResultsDiscipline`,
+  id = number at the end of the profile slug). `discover_meets.py --years`
+  reads the endpoint + public key from the site's JS config at runtime.
+- 426 athletes (<=10.30 since 2024) -> 1,328 missing 2024-25 meetings; kept the
+  1,066 with >=2 results from those athletes; 1,035 scraped (+43,170 rows ->
+  57,109). Failures: no elite 100m section, 500s, 3 wrong-event tables.
+- Backtest now 3,219 finals, ~5 min. Original 295 elite finals: log-loss
+  1.554 -> 1.421, top-1 49.8% -> 51.2%, cold start 3.7% -> 1.7%, top-end
+  calibration ~77% said -> 67% won (was 64%).
+- 21% cold starts across all finals: most new meets are lower level and 2024
+  is their first year of data. `discover_meets.py --years 2023` would help.
