@@ -4,10 +4,33 @@ Paste this into a new conversation to resume work on this project.
 
 ## Project location
 
-- Windows path: `D:\athleticsprediction`
-- WSL path: `/mnt/d/athleticsprediction`
+- Windows path: `D:\Users\rotem\projects\athleticsprediction` (moved; older
+  notes/scripts such as `_diag_scratch.py` still reference `D:\athleticsprediction`)
+- WSL path: `/mnt/d/Users/rotem/projects/athleticsprediction`
 - GitHub: https://github.com/eck123main/100m-prediction (branch: `main`)
 - Everything below is committed and pushed as of commit `629ee63`.
+
+## Working rule — commit regularly
+
+- **Commit after every meaningful step** (a bug fix, a feature, a dataset
+  rebuild, a doc update). Don't let uncommitted work pile up. Use small,
+  focused commits with conventional prefixes (`feat:`, `fix:`, `chore:`,
+  `docs:`), and push to `origin/main` so progress is saved off-machine.
+- Commit a dataset rebuild separately from code changes, so a bad
+  rescrape can be reverted on its own.
+- Update this file at the end of each session, and commit it.
+
+## Status as of 2026-10-05 (resuming after ~2 months)
+
+- Working tree clean; the last real work was the 2026-08-02 bug hunt below.
+- **Dataset ends 2026-07-25** (Italian Championships). It's missing everything
+  since then: the rest of the 2026 Diamond League season + DL Final, and the
+  late-season 2026 championships. These are exactly the high-quality
+  finals the model trains and backtests on.
+- Coverage gap 2012–2015 (only ~8 rows/year, championship finals only).
+- Stray files: an empty `python` file in the repo root (accidental), and
+  `_diag_scratch.py` (a debug script, committed in `c3a089e` with an old
+  hardcoded path).
 
 ## Python environment — important
 
