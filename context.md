@@ -369,3 +369,12 @@ Backtest now takes ~25-30 min.
 - **Live testing**: `predict.py --log [CSV]` appends the prediction (with
   model commit + data date); `score_predictions.py` grades logged races once
   results are up. Tested on two replays (Tokyo 2025, Brussels 2026).
+
+### Website (2026-10-05)
+
+- `app.py` — Streamlit app: Predict (multiselect or start-list URL), Replay a
+  past final (leak-free), Track record (backtest metrics, calibration chart,
+  accuracy by year, live prediction log). Run: `py -3.14 -m streamlit run app.py`.
+- `requirements.txt` added for Streamlit Community Cloud. Not deployed yet —
+  needs the user to sign in at share.streamlit.io with GitHub.
+- Streamlit installed for py -3.14 (`pip install --user streamlit`).

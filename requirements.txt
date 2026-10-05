@@ -1,0 +1,8 @@
+pandas>=2.2,<3
+numpy>=1.26
+requests
+beautifulsoup4
+lxml
+html5lib
+streamlit>=1.50
+altair>=5
