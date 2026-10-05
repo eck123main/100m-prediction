@@ -111,6 +111,30 @@ def predict_race_full(athlete_names, stats_table, n_simulations=10000, min_races
     return blend_win_probs(mc_probs, elo_probs, elo_weight=elo_weight)
 
 
+def log_prediction(log_path, probs, field, race_url, data_through):
+    """Append one row per athlete in the field (unscored athletes get 0) so
+    the prediction can be graded later against the actual result."""
+    import os
+    import subprocess
+    from datetime import datetime, timezone
+
+    try:
+        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
+                                text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        commit = None
+    logged_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    rows = pd.DataFrame({
+        "logged_at": logged_at,
+        "race_url": race_url,
+        "athlete": field,
+        "win_prob": [float(probs.get(a, 0.0)) for a in field],
+        "data_through": str(data_through),
+        "model_commit": commit,
+    })
+    rows.to_csv(log_path, mode="a", header=not os.path.exists(log_path), index=False)
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -123,6 +147,9 @@ if __name__ == "__main__":
                              "instead of typing names")
     parser.add_argument("--before", metavar="YYYY-MM-DD",
                         help="only use results before this date (replay a past race leak-free)")
+    parser.add_argument("--log", nargs="?", const="predictions_log.csv", metavar="CSV",
+                        help="append this prediction to a log (default predictions_log.csv) "
+                             "so score_predictions.py can grade it once results are in")
     args = parser.parse_args()
 
     names = list(args.athletes)
@@ -156,6 +183,10 @@ if __name__ == "__main__":
         print(f"  {rank}. {name:<28} {row['win_prob']:>5.1%}   "
               f"time~{row['weighted_avg_time']:.2f}s   finish_rate={row['finish_rate']:.0%}   "
               f"races={int(row['races_used'])}   elo={row['elo']:.0f}")
+
+    if args.log:
+        log_prediction(args.log, probs, field, args.startlist, data_through)
+        print(f"Logged to {args.log}")
 
     unmatched = set(field) - set(probs.index)
     if unmatched:

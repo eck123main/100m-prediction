@@ -17,6 +17,10 @@ a past race using only data from before it:
 py -3.14 predict.py --startlist "<race or meeting URL>" [--before 2025-09-13]
 ```
 
+Add `--log` to save the prediction to `predictions_log.csv`; after the race,
+`py -3.14 score_predictions.py` grades every logged prediction against the
+actual result.
+
 Prints each athlete's win probability plus the numbers behind it (recency-
 weighted time, finish rate, race count, Elo rating). Names are matched
 case-insensitively; anyone the model has no usable data for is listed
@@ -59,7 +63,7 @@ on this machine is 3.8 with pandas 2.0.3, which will crash — use `py -3.14`
 4. **`backtest.py`** — validates all of the above against ~295 real finals
    (filtered to plausible field sizes), and tunes `elo_weight` with an
    out-of-time split. Run `py -3.14 backtest.py` for the full breakdown
-   (~15-20 min).
+   (~10 s).
 
 ## Validated accuracy
 
@@ -68,9 +72,13 @@ methodology):
 
 | | Top-1 accuracy | vs. chance |
 |---|---|---|
-| All real finals (295) | 51.2% | 12.4% |
-| Excluding cold-start winners* (280) | 53.9% | 12.2% |
-| 2016+ finals (235) | 46.0% | 12.5% |
+| All real finals (295) | ~50% | 12.4% |
+| Excluding cold-start winners* (280) | ~52.5% | 12.2% |
+| 2016+ finals (235) | ~45% | 12.5% |
+
+For comparison, simply picking the fastest recent wind/round-adjusted time
+gets ~49% — the simulation and Elo mainly add calibrated probabilities
+rather than extra correct picks. Top-1 moves ~1 point between random seeds.
 
 \* cold start = the actual winner had zero prior races in the dataset —
 unpredictable in principle, not a model failure.

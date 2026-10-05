@@ -24,21 +24,27 @@ Paste this into a new conversation to resume work on this project.
 
 - Dataset: 9,861 rows, through 2026-09-23. Dense 2012-2026 plus every round
   of every World Championships/Olympics back to 1983.
-- Backtest: 295 real finals, **51.2% top-1** (53.9% excl. cold starts) vs
-  ~12% chance. Cold-start winners down to 5.1%. Default `elo_weight` 0.1.
+- Backtest (~10 s now): 295 finals, ~50% top-1 vs ~12% chance; log-loss
+  1.649. **Honest caveat:** the naive "fastest adjusted time" pick gets
+  ~49%, so the Monte Carlo/Elo layers add calibrated probabilities more than
+  extra winners. Half-life 180 days, `elo_weight` 0.1.
+- Live-test tooling ready: `predict.py --log`, `score_predictions.py`.
 - Everything committed and pushed.
 
 ### Suggested next steps
 
-1. ~~Elo from heats is noisy~~ — tested (see 2026-10-05 follow-up below):
-   down-weighting heats/semis or changing K makes no measurable difference
-   at elo_weight=0.1. Not worth more tuning; bigger gains are elsewhere.
-2. **Verify hub start lists live.** `predict.py --startlist URL` is built;
-   the championship format is verified, but the pre-race hub-page
-   `startList` shape is unobserved (WA clears it once results post). Try it
-   on the first 2027 Diamond League meeting and adjust
-   `scraper._hub_start_list_names` if it fails.
-4. ~~Per-race dates for multi-day meetings~~ — done (see below).
+1. **Live test in 2027**: before each big final, run
+   `py -3.14 predict.py --startlist <url> --log`, commit the log, and after
+   the race run `py -3.14 score_predictions.py`. This also verifies hub
+   start-list parsing (`scraper._hub_start_list_names`), still unobserved.
+2. **Calibration shape**: probabilities are too flat in the middle (picks at
+   ~35% win ~48%) and overconfident at the top (~77% picks win ~61%). A
+   single temperature can't fix both. Ideas: a learned mapping (e.g.
+   isotonic on top-pick prob), or modelling the race as a ranking
+   (Plackett-Luce) on adjusted times instead of independent normals.
+3. To add new meetings: query the calendar listing (see the 2026-10-05 log
+   below), add URLs to `links.py`, run `py -3.14 collect_data.py --new-only`,
+   then `py -3.14 backtest.py`.
 
 ## Python environment — important
 
@@ -311,7 +317,8 @@ improves calibration.
 - **Start lists**: `scraper.fetch_start_list(url)` +
   `predict.py --startlist URL [--before YYYY-MM-DD]`. Championship
   `/startlist` pages verified (Tokyo 2025 final replay: Thompson 34% top
-  pick, the actual winner). Hub pages fall back to results entrants after
+  pick — he finished 2nd; Oblique Seville won. Corrected: an earlier note
+  here wrongly said Thompson won). Hub pages fall back to results entrants after
   the race; pre-race shape untested.
 
 ### Follow-up 2: per-race dates, all-rounds championships, data hygiene
@@ -339,3 +346,25 @@ Backtest (295 finals): MC 51.2% top-1 (was 47.1%), excl. cold starts 53.9%,
 2016+ 46.0%. Elo grid log-loss train/test: w=0.0 1.471/1.896, w=0.1
 1.478/1.869, w=0.2 1.500/1.870 — 0.1 kept (train tie, better on test).
 Backtest now takes ~25-30 min.
+
+### Follow-up 3: speed, tuning, ablations, live-test tooling
+
+- **Backtest 25-30 min -> ~10 s**: vectorized `compute_stats_before`,
+  `compute_reliability_before` (identical output to 1e-14) and
+  `simulate_race` (one numpy draw for all runs).
+- **Tuning** (choose on pre-2022 finals by log-loss, confirm on 2022+,
+  paired bootstrap CI): half-life 730 -> 180 days adopted (train 1.479 ->
+  1.455, test 1.871 -> 1.848, CI -0.072..+0.029). Rejected: temperature
+  calibration T=1.3 (train better, test +0.020 worse), shrinking athlete
+  spread toward pooled (worse on both, though it fixes top-end
+  overconfidence), recency-weighted spread and spread scaling (train-only
+  gains that reversed on test).
+- **Ablations** (all within noise on log-loss): wind adjustment is the one
+  clearly useful component (top-1 drops ~3-4 points without it);
+  reliability gating small consistent gain; round adjustment neutral.
+  All kept.
+- **Model vs naive baseline**: ~50% vs ~49% top-1 — the extra modelling
+  mainly buys probabilities, not more correct picks.
+- **Live testing**: `predict.py --log [CSV]` appends the prediction (with
+  model commit + data date); `score_predictions.py` grades logged races once
+  results are up. Tested on two replays (Tokyo 2025, Brussels 2026).
