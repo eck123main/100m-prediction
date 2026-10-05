@@ -378,3 +378,25 @@ Backtest now takes ~25-30 min.
 - `requirements.txt` added for Streamlit Community Cloud. Not deployed yet —
   needs the user to sign in at share.streamlit.io with GitHub.
 - Streamlit installed for py -3.14 (`pip install --user streamlit`).
+
+### Bookmaker odds, more 2026 data, robust spread (2026-10-05)
+
+- `predict.py --odds "Name=2.5,..."` logs margin-free bookmaker probabilities;
+  `score_predictions.py` compares model vs bookmaker log-loss/top-1.
+- `discover_meets.py`: reads WA athlete profiles (urlSlug from hub JSON) for
+  everyone <=10.30 since 2025 and lists meetings we lack. Found 116 new 2026
+  meetings (African/Pan Am/NCAA/Australian champs, Mt SAC, Botswana GP...),
+  +4,078 rows -> 13,939. Profiles only server-render the current season;
+  earlier years load client-side (not scraped yet).
+- Hand-timed marks ("10.1h") are dropped in load_clean_data (were counted as
+  DNFs by reliability).
+- **Spread**: replaced all-history std with `robust_spread` (MAD over last
+  730 days, shrunk toward field median by 5 pseudo-races). Fixes erratic
+  athletes getting extra win probability (Leotlela 17.3% -> 2.1% vs a
+  similar-form Coleman). Pre-2022 log-loss -0.070 (CI excludes 0), 2022+
+  neutral. On the original 295 finals: log-loss 1.649 -> 1.554, top-1 ~50%.
+- Backtest set is now 622 finals (21% cold starts from the new small meets).
+  Top-end calibration still overconfident (~78% said -> ~64% won).
+
+Next: earlier seasons from athlete profiles (needs WA's client-side API),
+indoor 60m as early-season form, then top-end calibration.
