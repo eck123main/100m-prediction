@@ -102,6 +102,9 @@ def predict_race_full(athlete_names, stats_table, n_simulations=10000, min_races
     with head-to-head Elo. elo_weight=0.1 was chosen in backtest.py by
     log-loss on finals before 2022 over a 0-1 grid, and holds up on 2022+
     finals (2026-10 rebuild: 295 finals, heats now rated as separate races).
+    After the all-rounds championship data, 0.0 and 0.1 tie on pre-2022
+    log-loss (1.471 vs 1.478) while 0.1 is clearly better on 2022+ (1.869
+    vs 1.896), so 0.1 is kept.
     Elo alone is a weaker signal than the time model; a small weight helps
     probability calibration, larger weights hurt it."""
     mc_probs = simulate_race(athlete_names, stats_table, n_simulations=n_simulations, min_races=min_races)

@@ -22,9 +22,10 @@ Paste this into a new conversation to resume work on this project.
 
 ## Status as of 2026-10-05 (end of session)
 
-- Dataset: 8,163 rows, through 2026-09-23 (Asian Games). Dense 2012-2026.
-- Backtest: 295 real finals, **47.1% top-1** (51.9% excl. cold starts) vs
-  ~12% chance. Default `elo_weight` is now **0.1**.
+- Dataset: 9,861 rows, through 2026-09-23. Dense 2012-2026 plus every round
+  of every World Championships/Olympics back to 1983.
+- Backtest: 295 real finals, **51.2% top-1** (53.9% excl. cold starts) vs
+  ~12% chance. Cold-start winners down to 5.1%. Default `elo_weight` 0.1.
 - Everything committed and pushed.
 
 ### Suggested next steps
@@ -37,13 +38,7 @@ Paste this into a new conversation to resume work on this project.
    `startList` shape is unobserved (WA clears it once results post). Try it
    on the first 2027 Diamond League meeting and adjust
    `scraper._hub_start_list_names` if it fails.
-4. **Per-race dates for multi-day meetings.** Hub JSON has a `date` per
-   race (`races[].date`), but rows store the meeting start date. Using the
-   race date would let heats/semis inform that meeting's final. Needs a
-   hub re-scrape (same safe approach as the heat migration).
-3. To add new meetings: query the calendar listing (see the 2026-10-05 log
-   below), add URLs to `links.py`, run `py -3.14 collect_data.py --new-only`,
-   then `py -3.14 backtest.py` (~15-20 min).
+4. ~~Per-race dates for multi-day meetings~~ — done (see below).
 
 ## Python environment — important
 
@@ -318,3 +313,29 @@ improves calibration.
   `/startlist` pages verified (Tokyo 2025 final replay: Thompson 34% top
   pick, the actual winner). Hub pages fall back to results entrants after
   the race; pre-race shape untested.
+
+### Follow-up 2: per-race dates, all-rounds championships, data hygiene
+
+- **Per-race dates**: `scrape_hub_race` uses `races[].date`, so heats of a
+  multi-day meeting precede its final. Same-day rounds still don't leak
+  (stats use strictly-before dates).
+- **Championships moved to hub pages**: the flat `/final/result` pages had
+  no heats/semis for 2023+ (404) and only one heat for Oregon 2022. Hub
+  pages have every round back to 1983 (Paris 2024: 8 -> 153 rows). All 27
+  finals verified identical (3 differed only by name spelling). Quarter-
+  finals get their own round; decathlon 100m ('Combined - Group', listed in
+  the same section on some old championships) is skipped.
+- **Per-heat wind** on multi-heat flat pages (was first heat's wind for all).
+- **`ATHLETE_ALIASES`** in features.py merges same-person spellings
+  (Bracy/Bracy-Williams, Demps, Makusha, Batson); also applied to CLI input.
+- **collect_data.py**: full run no longer drops rows for URLs that fail to
+  fetch; empty-frame concat FutureWarning fixed.
+- Checked and left alone: remaining 6 cross-source "duplicates" are genuine
+  (same athlete ran the same time in a heat and the final that day).
+- Round offsets now: heats +0.042s, quarter +0.008s, semi +0.009s vs final;
+  wind coefficient -0.049 s per m/s.
+
+Backtest (295 finals): MC 51.2% top-1 (was 47.1%), excl. cold starts 53.9%,
+2016+ 46.0%. Elo grid log-loss train/test: w=0.0 1.471/1.896, w=0.1
+1.478/1.869, w=0.2 1.500/1.870 — 0.1 kept (train tie, better on test).
+Backtest now takes ~25-30 min.

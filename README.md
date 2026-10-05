@@ -1,8 +1,8 @@
 # 100m Prediction
 
 Predicts men's 100m race outcomes from historical World Athletics results
-(dense 2012-2026 coverage, plus championship finals back to 1983). ~8,160
-result rows scraped from worldathletics.org, through September 2026.
+(dense 2012-2026 coverage, plus every round of every World Championships /
+Olympics back to 1983). ~9,860 result rows scraped from worldathletics.org, through September 2026.
 
 ## Quick start: predict an upcoming race
 
@@ -68,9 +68,9 @@ methodology):
 
 | | Top-1 accuracy | vs. chance |
 |---|---|---|
-| All real finals (295) | 47.1% | 12.4% |
-| Excluding cold-start winners* (268) | 51.9% | 12.2% |
-| 2016+ finals (235) | 43.8% | 12.5% |
+| All real finals (295) | 51.2% | 12.4% |
+| Excluding cold-start winners* (280) | 53.9% | 12.2% |
+| 2016+ finals (235) | 46.0% | 12.5% |
 
 \* cold start = the actual winner had zero prior races in the dataset —
 unpredictable in principle, not a model failure.
@@ -84,7 +84,7 @@ the model's misses had the actual winner ranked in its own top 2.
 
 ## Known limitations
 
-- **Cold start**: ~9% of race winners have zero prior history in the
+- **Cold start**: ~5% of race winners have zero prior history in the
   dataset (debutants, or the first race of an early era) — unpredictable by
   construction.
 - **No start times/splits/lane data** — only finishing time, wind, round,
@@ -95,6 +95,5 @@ the model's misses had the actual winner ranked in its own top 2.
   DNF flag), not a scraper parsing bug. Filtered to NaN in `features.py`.
 - `--startlist` is verified on championship pages; on Diamond League /
   hub pages the pre-race start-list format hasn't been seen live yet.
-- Multi-day championships: every round of a hub-format meeting carries the
-  meeting's start date, so heats/semis of the same meeting aren't used to
-  predict its final (conservative, not a leak).
+- Each race is dated by its own day, so a championship's earlier rounds
+  inform its final; same-day rounds (often semis + final) don't.
