@@ -12,7 +12,9 @@ import pandas as pd
 from features import compute_stats_before, get_real_races
 from predict import predict_race, simulate_race, elo_win_probs, blend_win_probs
 
-ELO_WEIGHTS_TO_COMPARE = [0.3, 0.5, 0.7]
+ELO_WEIGHTS_TO_COMPARE = [round(w, 1) for w in np.arange(0.0, 1.01, 0.1)]
+TUNE_SPLIT_DATE = "2022-01-01"  # tune elo_weight on finals before this, test on finals after
+EPS = 1e-3  # floor on prob assigned to the winner, so log-loss stays finite
 
 
 def get_real_finals(df):
@@ -70,6 +72,7 @@ def evaluate_race(race_df, df, min_races=1):
         blend_winner = blended.index[0] if len(blended) > 0 else None
         result[f"blend{int(w*100)}_correct"] = blend_winner == actual_winner
         result[f"blend{int(w*100)}_prob_assigned_to_winner"] = blended.get(actual_winner, 0.0)
+        result[f"blend{int(w*100)}_logloss"] = -np.log(max(blended.get(actual_winner, 0.0), EPS))
 
     return result
 
@@ -103,9 +106,29 @@ def summarize(results):
     return pd.Series(out)
 
 
+def tune_elo_weight(results, split_date=TUNE_SPLIT_DATE):
+    """Pick elo_weight by mean log-loss (prob assigned to the actual winner)
+    on finals before split_date, then report it on finals from split_date on
+    — an out-of-time check that the chosen weight isn't just fit to noise."""
+    rows = []
+    for w in ELO_WEIGHTS_TO_COMPARE:
+        k = f"blend{int(w*100)}"
+        row = {"elo_weight": w}
+        for name, part in [("train", results[results["date"] < split_date]),
+                           ("test", results[results["date"] >= split_date]),
+                           ("all", results)]:
+            row[f"{name}_logloss"] = part[f"{k}_logloss"].mean()
+            row[f"{name}_top1"] = part[f"{k}_correct"].mean()
+        rows.append(row)
+    table = pd.DataFrame(rows).set_index("elo_weight")
+    best = table["train_logloss"].idxmin()
+    return table, best
+
+
 if __name__ == "__main__":
     from features import load_clean_data
 
+    np.random.seed(0)  # simulate_race is Monte Carlo — fix the seed so runs are reproducible
     df = load_clean_data()
     results = run_backtest(df)
     results.to_csv("backtest_results.csv", index=False)
@@ -158,6 +181,14 @@ if __name__ == "__main__":
     warm = warm.copy()
     warm["prob_bucket"] = pd.cut(warm["top_pick_prob"], bins=[0, 0.2, 0.3, 0.4, 0.5, 1.0])
     print(warm.groupby("prob_bucket", observed=True)["mc_correct"].agg(["mean", "count"]))
+    print()
+
+    print(f"=== elo_weight tuning: fit on finals before {TUNE_SPLIT_DATE}, test after ===")
+    table, best = tune_elo_weight(results)
+    n_train = (results["date"] < TUNE_SPLIT_DATE).sum()
+    print(f"train races: {n_train}, test races: {len(results) - n_train}")
+    print(table.round(3).to_string())
+    print(f"Best elo_weight on train (min log-loss): {best}")
     print()
 
     print("=== Does adding Elo (head-to-head) fix the confidently-wrong MC misses? ===")
