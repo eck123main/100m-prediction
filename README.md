@@ -88,13 +88,15 @@ methodology):
 
 | | Top-1 accuracy | vs. chance |
 |---|---|---|
-| All real finals (295) | ~50% | 12.4% |
-| Excluding cold-start winners* (280) | ~52.5% | 12.2% |
-| 2016+ finals (235) | ~45% | 12.5% |
+| All real finals (622) | 45.8% | ~12% |
+| Excluding cold-start winners* (492) | 57.9% | ~12% |
+| The original 295 elite finals | 49.8% | 12.4% |
 
-For comparison, simply picking the fastest recent wind/round-adjusted time
-gets ~49% — the simulation and Elo mainly add calibrated probabilities
-rather than extra correct picks. Top-1 moves ~1 point between random seeds.
+The jump to 622 finals comes from 116 extra 2026 meetings (NCAA, area
+championships, national meets) where many winners have no earlier results in
+the data yet. Simply picking the fastest recent adjusted time scores about
+the same top-1; the model's value is in its probabilities (log-loss 1.554 on
+the original 295 finals, down from 1.649).
 
 \* cold start = the actual winner had zero prior races in the dataset —
 unpredictable in principle, not a model failure.
@@ -108,7 +110,7 @@ the model's misses had the actual winner ranked in its own top 2.
 
 ## Known limitations
 
-- **Cold start**: ~5% of race winners have zero prior history in the
+- **Cold start**: ~4% of elite-final winners (21% across all finals incl. small 2026 meets) have zero prior history in the
   dataset (debutants, or the first race of an early era) — unpredictable by
   construction.
 - **No start times/splits/lane data** — only finishing time, wind, round,
