@@ -6,7 +6,11 @@ average time, consistency, and cutoff-based stats for leak-free backtesting.
 import pandas as pd
 import numpy as np
 
-HALF_LIFE_DAYS = 365 * 2  # a race's weight halves every ~2 years
+# A race's weight halves every ~6 months. Tuned 2026-10-05 over
+# {180, 365, 730, 1460, inf} days: 180 had the best log-loss on pre-2022
+# finals (1.455 vs 1.479 at 730) and also on 2022+ finals (1.848 vs 1.871),
+# though the 2022+ gain is within noise (95% CI -0.072..+0.029).
+HALF_LIFE_DAYS = 180
 
 # Men's 100m world record is 9.58s; even a weak heat qualifier at the
 # competition levels this scraper covers finishes well under 13s. Times
