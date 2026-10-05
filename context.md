@@ -8,7 +8,7 @@ Paste this into a new conversation to resume work on this project.
   notes/scripts such as `_diag_scratch.py` still reference `D:\athleticsprediction`)
 - WSL path: `/mnt/d/Users/rotem/projects/athleticsprediction`
 - GitHub: https://github.com/eck123main/100m-prediction (branch: `main`)
-- Everything below is committed and pushed as of commit `629ee63`.
+- Everything below is committed and pushed (see git log for the latest).
 
 ## Working rule — commit regularly
 
@@ -20,17 +20,26 @@ Paste this into a new conversation to resume work on this project.
   rescrape can be reverted on its own.
 - Update this file at the end of each session, and commit it.
 
-## Status as of 2026-10-05 (resuming after ~2 months)
+## Status as of 2026-10-05 (end of session)
 
-- Working tree clean; the last real work was the 2026-08-02 bug hunt below.
-- **Dataset ends 2026-07-25** (Italian Championships). It's missing everything
-  since then: the rest of the 2026 Diamond League season + DL Final, and the
-  late-season 2026 championships. These are exactly the high-quality
-  finals the model trains and backtests on.
-- Coverage gap 2012–2015 (only ~8 rows/year, championship finals only).
-- Stray files: an empty `python` file in the repo root (accidental), and
-  `_diag_scratch.py` (a debug script, committed in `c3a089e` with an old
-  hardcoded path).
+- Dataset: 8,163 rows, through 2026-09-23 (Asian Games). Dense 2012-2026.
+- Backtest: 295 real finals, **47.1% top-1** (51.9% excl. cold starts) vs
+  ~12% chance. Default `elo_weight` is now **0.1**.
+- Everything committed and pushed.
+
+### Suggested next steps
+
+1. **Elo from heats is noisy.** Standalone Elo accuracy dipped (37.8% ->
+   34.9%) once heats became separate rated races, since athletes ease off
+   in heats. Try weighting Elo updates by round (e.g. lower K for heats),
+   or rating finals/semis only, and re-run the backtest.
+2. **Start-list scraping.** The calendar listing has `hasStartlist`; a
+   `predict.py --meet <id>` that pulls the field automatically is the
+   biggest usability win. Wait for the 2027 season to test against a live
+   start list.
+3. To add new meetings: query the calendar listing (see the 2026-10-05 log
+   below), add URLs to `links.py`, run `py -3.14 collect_data.py --new-only`,
+   then `py -3.14 backtest.py` (~15-20 min).
 
 ## Python environment — important
 
@@ -235,3 +244,60 @@ from 145 to 1,142 (previously mislabeled as `heats`). Mislabeled-as-
 - `chore: remove dead MIN/MAX_FIELD_SIZE constants in backtest.py`
 - `fix: update elo_weight default and docs from re-validated backtest`
 - `docs: update session context with this session's bug-hunt findings`
+
+---
+
+## Session 2026-10-05: catch-up scrape, scraper fixes, heats as races
+
+### Finding new meetings (reusable method)
+
+`https://worldathletics.org/competition/calendar-results?startDate=...&endDate=...&competitionGroupId=<id>`
+embeds results in `__NEXT_DATA__` (`props.pageProps.initialEvents.results`,
+each with `id`, `name`, `startDate`, `hasResults`). Useful group ids: 627
+Diamond League meeting, 3520 DL Final, 3773 Continental Tour, 3731 national
+senior championships, 3660/3771/3757 area champs/games; `rankingCategoryId`
+4 (OW) / 5 (GW) / 6 (GL) / 1 (A) catches majors without a group (e.g.
+Commonwealth Games). Then scrape each with
+`competition/calendar-results/results/{id}?eventId=10229630` — a 500 on that
+URL means the meeting has no men's 100m.
+
+### What changed
+
+- **Added Aug-Sep 2026**: Commonwealth Games, European Champs, Ultimate
+  Championship, Asian Games, CAC/Mediterranean/South American Games, late
+  DL (Silesia, Brussels final), ~16 Continental Tour meetings, some national
+  champs. Lausanne/Zurich 2026 had no DL men's 100m.
+- **Added 2012-2015 Diamond League** (39 meetings with a men's 100m).
+- **Bug: DL-form hub URLs hide sections.** `competitions/diamond-league/
+  calendar-results/{id}/result` omitted real DL 100m finals (Zurich
+  2022/2025, Lausanne 2025, Silesia 2025, Pre 2022) that the generic
+  `competition/calendar-results/results/{id}` URL shows. All hub links
+  converted to the generic form.
+- **Bug: hub tier fallback was a blocklist** — could pick U18/U23 races or
+  the "Karsten vs. Mondo" exhibition. Now an allowlist (`ELITE_HUB_TIERS`).
+  Verified no existing rows were contaminated.
+- **New `heat` column** (closes the "residual Elo precision gap" open item):
+  both scrapers record which race within a round each row came from; races
+  are keyed on `RACE_KEYS = (source_url, round, heat)`. Real races usable
+  for Elo: 274 -> 1,061. 328/331 URLs re-scraped identically; the other 3
+  keep rows with empty heat (treated as heat 1).
+- **Oregon 2022 Worlds** rows had no date (page lacks EventDate meta) —
+  filled 15/07/2022; the 2022 final was previously an automatic miss.
+- **`collect_data.py --new-only`**: incremental mode. Note the full `main()`
+  drops existing rows for every attempted URL even if the fetch fails.
+- **Backtest**: elo_weight grid 0-1, scored by log-loss, fit on pre-2022
+  finals and checked on 2022+; seeded Monte Carlo. Best = 0.1 on both the
+  pre-heat and heat-aware data.
+- Removed stray `python` file and `_diag_scratch.py`.
+
+### Results (heat-aware, 295 finals)
+
+| Slice | Races | MC top-1 | blend 0.1 | Elo alone | chance |
+|---|---|---|---|---|---|
+| All | 295 | 47.1% | 47.1% | 34.9% | 12.4% |
+| Excl. cold starts | 268 | 51.9% | 51.9% | 38.4% | 12.2% |
+| 2016+ | 235 | 43.8% | 43.8% | 32.3% | 12.5% |
+
+Log-loss (lower better): w=0.0 train 1.804 / test 2.082; w=0.1 1.794 /
+2.011; w=0.3 1.826 / 1.998. Top-1 barely moves; the small Elo weight mainly
+improves calibration.
