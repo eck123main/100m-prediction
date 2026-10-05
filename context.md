@@ -21,38 +21,84 @@ Paste this into a new conversation to resume work on this project.
   rescrape can be reverted on its own.
 - Update this file at the end of each session, and commit it.
 
-## Status as of 2026-10-05 (end of session)
+## START HERE — status at end of 2026-10-05 session
 
-- Dataset: 9,861 rows, through 2026-09-23. Dense 2012-2026 plus every round
-  of every World Championships/Olympics back to 1983.
-- Backtest (~5 min with 57k rows): 295 finals, ~50% top-1 vs ~12% chance; log-loss
-  1.649. **Honest caveat:** the naive "fastest adjusted time" pick gets
-  ~49%, so the Monte Carlo/Elo layers add calibrated probabilities more than
-  extra winners. Half-life 180 days, `elo_weight` 0.1.
-- Live-test tooling ready: `predict.py --log`, `score_predictions.py`.
-- Everything committed and pushed.
+**The model works and is live.** Website (Streamlit Community Cloud, from
+this repo, branch `main`, file `app.py`):
+https://100m-prediction-5zcsyvwkxjrsdfmna4cfej.streamlit.app (the repo is
+private; the app was deployed by the user's eck123main Streamlit account —
+if that URL doesn't open, find the app under "My apps" at share.streamlit.io).
+Pushing to `main` redeploys it automatically.
 
-### Suggested next steps
+**Data:** 57,109 rows (`100m_races_dataset.csv`), through 2026-09-23.
+Dense 2012-2026 elite meets, every round of every Worlds/Olympics back to
+1983, plus ~1,150 extra 2024-2026 meetings (NCAA, national champs, area
+champs, smaller invitationals) found via athlete profiles.
 
-1. **Live test in 2027**: before each big final, run
-   `py -3.14 predict.py --startlist <url> --log`, commit the log, and after
-   the race run `py -3.14 score_predictions.py`. This also verifies hub
-   start-list parsing (`scraper._hub_start_list_names`), still unobserved.
-2. **Calibration shape**: probabilities are too flat in the middle (picks at
-   ~35% win ~48%) and overconfident at the top (~77% picks win ~61%). A
-   single temperature can't fix both. Ideas: a learned mapping (e.g.
-   isotonic on top-pick prob), or modelling the race as a ranking
-   (Plackett-Luce) on adjusted times instead of independent normals.
-3. To add new meetings: query the calendar listing (see the 2026-10-05 log
-   below), add URLs to `links.py`, run `py -3.14 collect_data.py --new-only`,
-   then `py -3.14 backtest.py`.
+**Model** (features.py + predict.py):
+- Form = wind- and round-adjusted times, recency-weighted (half-life 180
+  days). Spread = robust MAD over last 730 days, shrunk toward the field
+  (`robust_spread`). Reliability = Beta-shrunk finish rate.
+- 10,000-run Monte Carlo (vectorized) -> win probabilities, blended 90/10
+  with head-to-head Elo (each heat rated as its own race).
+- Hand-timed marks dropped; `ATHLETE_ALIASES` merges name variants.
+
+**Backtest** (`py -3.14 backtest.py`, ~5 min; writes `backtest_results.csv`,
+which is committed so the website loads fast — re-run and commit it after
+any model change):
+- Original 295 elite finals: **51.2% top-1**, log-loss **1.421**, cold
+  start 1.7%. Fastest-adjusted-time rule gets ~52% top-1, so the model's
+  value is calibrated probabilities, not more correct picks.
+- All 3,219 finals: 45.7% top-1 (58.0% excl. the 21% cold starts — most new
+  lower-level meets have no pre-2024 history yet).
+- Calibration (elite finals): middle buckets well calibrated; top end still
+  overconfident (~77% said -> ~67% won).
+
+**Honest standing vs Velocitra** (B2B odds supplier to sportsbooks, built on
+the Tilastopaja database): we can't match their breadth; aim is depth on the
+men's 100m + a transparent track record. The real benchmark is bookmaker
+odds — tooling is ready (`--odds`), needs live 2027 races.
+
+### Next steps (agreed plan, in order)
+
+1. **`py -3.14 discover_meets.py --years 2023`** -> add the meetings it lists
+   (>=2 results) to the bottom of `OTHER_HUB_URLS` in `links.py` (same as
+   the 2024-25 block) -> `py -3.14 collect_data.py --new-only` (~40 min, runs
+   silently until done) -> sanity-check rows -> commit links, then data ->
+   `py -3.14 backtest.py` -> commit `backtest_results.csv`. Goal: cut the
+   21% cold-start rate.
+2. **Indoor 60m** as early-season form (profiles/API include indoor events;
+   needs a scale conversion 60m -> 100m and a flag).
+3. **Top-end overconfidence**: tried and rejected so far — temperature
+   scaling, spread shrinkage, spread scaling. Untried: isotonic mapping on
+   top-pick prob, Plackett-Luce ranking model.
+4. **Live test in 2027**: before big races
+   `py -3.14 predict.py --startlist <url> --log --odds "Name=2.5,..."`,
+   commit `predictions_log.csv`; after: `py -3.14 score_predictions.py`.
+   Also verifies hub start-list parsing (`scraper._hub_start_list_names`),
+   never seen live.
+5. Tuning rule used throughout: choose on finals before 2022, confirm on
+   2022+ with a paired bootstrap; only adopt if it doesn't hurt 2022+.
+
+### Commands cheat sheet
+
+```
+py -3.14 predict.py "Noah Lyles" "Oblique Seville" ...        # predict
+py -3.14 predict.py --startlist <WA url> [--before YYYY-MM-DD] [--log] [--odds "..."]
+py -3.14 score_predictions.py                                # grade logged predictions
+py -3.14 backtest.py                                         # ~5 min
+py -3.14 discover_meets.py [--years 2023 2024]               # find missing meetings
+py -3.14 collect_data.py --new-only                          # scrape new links.py URLs
+py -3.14 -m streamlit run app.py                             # website locally
+```
 
 ## Python environment — important
 
 - This machine has multiple Python installs. The default `python`/`py` on
   PATH is Python 3.8 with pandas 2.0.3 — **too old**, code uses
   `include_groups=` (pandas >=2.2) and will crash.
-- Use `py -3.14` (pandas 2.3.3 confirmed working) or `py -3.11` (pandas
+- Use `py -3.14` (pandas 2.3.3, streamlit 1.65 installed with
+  `pip install --user`; confirmed working) or `py -3.11` (pandas
   2.3.1, also fine). Always run scripts explicitly, e.g.:
   ```
   py -3.14 predict.py "Noah Lyles" "Kishane Thompson"
@@ -71,35 +117,28 @@ Paste this into a new conversation to resume work on this project.
 
 ## What the project does
 
-Predicts men's 100m race win probabilities from ~6,795 scraped
-worldathletics.org race results (2016–2026 dense coverage, scattered
-championship finals back to 1983).
+Predicts men's 100m race win probabilities from World Athletics results
+scraped from worldathletics.org (see START HERE for current numbers).
 
 ## File map
 
 | File | Purpose |
 |---|---|
-| `100m_races_dataset.csv` | The scraped dataset (ATHLETE, COUNTRY, time, record_flag, Reaction Time, wind, date, venue, meet_name, source_url, round) |
-| `scraper.py` / `links.py` / `collect_data.py` / `probe_hub_ids.py` | Scraping infra (worldathletics.org) |
-| `features.py` | Raw race rows → leak-free athlete stats |
-| `predict.py` | Turns stats into predictions; also a CLI (see Quick Start) |
-| `backtest.py` | Leak-free backtest harness against real finals |
-| `README.md` | Full technical docs |
-| `PROJECT_GOALS.md` | Project vision/ambitions |
-| `pred.ipynb` | Original exploratory notebook (superseded by the `.py` modules, kept for history) |
+| `100m_races_dataset.csv` | Dataset: ATHLETE, COUNTRY, time, record_flag, Reaction Time, wind, date (per race), venue, meet_name, source_url, round (heats/quarter-final/semi-final/final), heat |
+| `links.py` | Every source URL (CHAMPIONSHIP_URLS, DIAMOND_LEAGUE_HUB_URLS, OTHER_HUB_URLS, CONTINENTAL_TOUR_*) — mostly generic hub URLs `competition/calendar-results/results/{id}?eventId=10229630` |
+| `scraper.py` | `scrape_hub_race` (hub JSON, tier allowlist `ELITE_HUB_TIERS`, per-race dates/wind/heat), `scrape_race` (old flat pages), `fetch_start_list` |
+| `collect_data.py` | Rebuild (`main`) or add only new URLs (`--new-only`, safe) |
+| `discover_meets.py` | Find meetings we lack from athlete profiles / WA GraphQL (`--years`) |
+| `features.py` | Cleaning, wind/round adjustment, robust spread, reliability, Elo, `compute_stats_before` (leak-free) |
+| `predict.py` | Monte Carlo + Elo blend; CLI with `--startlist`, `--before`, `--log`, `--odds` |
+| `backtest.py` | Leak-free backtest over every real final; Elo weight grid with train/test split |
+| `backtest_results.csv` | Saved backtest output (read by the website) |
+| `score_predictions.py` | Grades logged live predictions (and bookmaker odds) |
+| `app.py` / `requirements.txt` | Streamlit website / deps for Streamlit Cloud |
+| `probe_hub_ids.py`, `test_year_access.py`, `pred.ipynb` | Old one-off tools / original notebook |
 
-## Quick start — predict a real race
-
-```
-py -3.14 predict.py "Noah Lyles" "Kishane Thompson" "Fred Kerley" "Akani Simbine"
-```
-
-Prints win probabilities plus `weighted_avg_time`, `finish_rate`,
-`races_used`, `elo` per athlete. Name matching is case-insensitive; anyone
-the model has no usable data for is listed separately, not silently
-dropped.
-
----
+*(Everything below is the historical session log — numbers in it are as of
+that point in time. START HERE above is current.)*
 
 ## Session 2026-08-02: bug hunt — "look into the scraping bug and all bugs"
 

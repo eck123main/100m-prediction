@@ -44,12 +44,12 @@ uncertainty was treated as a feature requirement, not a hedge.
 
 ## Where it stands
 
-The feature pipeline (recency-weighted + wind-adjusted + round-adjusted
-time, reliability-gated Monte Carlo, head-to-head Elo, blended prediction)
-is built and validated: ~42-47% top-1 accuracy on real finals vs. ~12%
-chance-level. A command-line tool exists to actually run a prediction on a
-real upcoming field. See `README.md` for the technical details and
-`context.md` for a full recap of what's been done.
+As of 2026-10-05: ~57,000 results, a calibrated Monte Carlo + Elo model,
+a leak-free backtest (51% top-1 on elite finals vs ~12% chance, roughly level
+with the fastest-time rule but with much better probabilities), a live
+Streamlit website, start-list fetching, and tooling to log predictions and
+compare them to bookmaker odds in the 2027 season. See `context.md` → START
+HERE for the current numbers and the next steps.
 
 ## Open ambitions (not yet built)
 
