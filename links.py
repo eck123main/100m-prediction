@@ -3,42 +3,45 @@ Central store of all race URLs. Add new ones here, then run
 collect_data.py to scrape and merge them into the dataset.
 """
 
+# Hub-format pages (scraped with scrape_hub_race): unlike the old
+# .../men/100-metres/final/result pages, these include every round (heats,
+# quarter-finals, semis, final) with each race's own date and wind.
 CHAMPIONSHIP_URLS = [
-    "https://worldathletics.org/results/olympic-games/2024/the-xxxiii-olympic-games-7153115/men/100-metres/final/result",  # Paris 2024
-    "https://worldathletics.org/results/world-athletics-championships/2023/world-athletics-championships-budapest-2023-7138987/men/100-metres/final/result",  # Budapest 2023
-    "https://worldathletics.org/results/olympic-games/2021/the-xxxii-olympic-games-7132391/men/100-metres/final/result",  # Tokyo 2020(21)
-    "https://worldathletics.org/competitions/world-athletics-championships/world-athletics-championships-oregon-2022-7137279/results/men/100-metres/final/result",  # Oregon 2022
-    "https://worldathletics.org/results/world-athletics-championships/2019/iaaf-world-athletics-championships-doha-2019-7125365/men/100-metres/final/result",  # Doha 2019
-    "https://worldathletics.org/results/world-athletics-championships/2017/iaaf-world-championships-london-2017-7093740/men/100-metres/final/result",  # London 2017
-    "https://worldathletics.org/results/iaaf-world-championships-in-athletics/2015/15th-iaaf-world-championships-7078726/men/100-metres/final/result",  # Beijing 2015
-    "https://worldathletics.org/results/world-athletics-championships/2013/14th-iaaf-world-championships-7003368/men/100-metres/final/result",  # Moscow 2013
-    "https://worldathletics.org/results/olympic-games/2012/the-xxx-olympic-games-6999193/men/100-metres/final/result",  # London 2012
-    "https://worldathletics.org/results/world-athletics-championships/2011/13th-iaaf-world-championships-in-athletics-7003367/men/100-metres/final/result",  # Daegu 2011
+    "https://worldathletics.org/competition/calendar-results/results/7153115?eventId=10229630",  # Paris 2024
+    "https://worldathletics.org/competition/calendar-results/results/7138987?eventId=10229630",  # Budapest 2023
+    "https://worldathletics.org/competition/calendar-results/results/7132391?eventId=10229630",  # Tokyo 2020(21)
+    "https://worldathletics.org/competition/calendar-results/results/7137279?eventId=10229630",  # Oregon 2022
+    "https://worldathletics.org/competition/calendar-results/results/7125365?eventId=10229630",  # Doha 2019
+    "https://worldathletics.org/competition/calendar-results/results/7093740?eventId=10229630",  # London 2017
+    "https://worldathletics.org/competition/calendar-results/results/7078726?eventId=10229630",  # Beijing 2015
+    "https://worldathletics.org/competition/calendar-results/results/7003368?eventId=10229630",  # Moscow 2013
+    "https://worldathletics.org/competition/calendar-results/results/6999193?eventId=10229630",  # London 2012
+    "https://worldathletics.org/competition/calendar-results/results/7003367?eventId=10229630",  # Daegu 2011
 
     # Added: gaps found by cross-referencing worldathletics.org's calendar-results
     # API (competitionGroupId=6 for Worlds, =5 for Olympics) against the URLs above.
     # Note: the slug text in these URLs is cosmetic — worldathletics.org resolves
     # purely off the trailing numeric ID, confirmed by requesting these same IDs
     # with garbage slugs and getting identical 200 responses.
-    "https://worldathletics.org/results/world-athletics-championships/2025/world-athletics-championships-tokyo-2025-7190593/men/100-metres/final/result",  # Tokyo 2025
-    "https://worldathletics.org/results/olympic-games/2016/the-xxxi-olympic-games-7093747/men/100-metres/final/result",  # Rio 2016
-    "https://worldathletics.org/results/olympic-games/2008/the-xxix-olympic-games-6977748/men/100-metres/final/result",  # Beijing 2008
-    "https://worldathletics.org/results/olympic-games/2004/the-xxviii-olympic-games-6913163/men/100-metres/final/result",  # Athens 2004
-    "https://worldathletics.org/results/olympic-games/2000/the-xxvii-olympic-games-6951910/men/100-metres/final/result",  # Sydney 2000
+    "https://worldathletics.org/competition/calendar-results/results/7190593?eventId=10229630",  # Tokyo 2025
+    "https://worldathletics.org/competition/calendar-results/results/7093747?eventId=10229630",  # Rio 2016
+    "https://worldathletics.org/competition/calendar-results/results/6977748?eventId=10229630",  # Beijing 2008
+    "https://worldathletics.org/competition/calendar-results/results/6913163?eventId=10229630",  # Athens 2004
+    "https://worldathletics.org/competition/calendar-results/results/6951910?eventId=10229630",  # Sydney 2000
     # 1996 Atlanta Olympics: this ID (6961749) 404s on the modern results path —
     # not migrated to this URL scheme. Skipped rather than guessing further.
-    "https://worldathletics.org/results/world-athletics-championships/2009/iaaf-world-championships-berlin-2009-6998524/men/100-metres/final/result",  # Berlin 2009
-    "https://worldathletics.org/results/world-athletics-championships/2007/iaaf-world-championships-osaka-2007-6903480/men/100-metres/final/result",  # Osaka 2007
-    "https://worldathletics.org/results/world-athletics-championships/2005/iaaf-world-championships-helsinki-2005-6937596/men/100-metres/final/result",  # Helsinki 2005
-    "https://worldathletics.org/results/world-athletics-championships/2003/iaaf-world-championships-paris-2003-6930156/men/100-metres/final/result",  # Paris/Saint-Denis 2003
-    "https://worldathletics.org/results/world-athletics-championships/2001/iaaf-world-championships-edmonton-2001-6947294/men/100-metres/final/result",  # Edmonton 2001
-    "https://worldathletics.org/results/world-athletics-championships/1999/iaaf-world-championships-seville-1999-6939522/men/100-metres/final/result",  # Seville 1999
-    "https://worldathletics.org/results/world-athletics-championships/1997/iaaf-world-championships-athens-1997-6913256/men/100-metres/final/result",  # Athens 1997
-    "https://worldathletics.org/results/world-athletics-championships/1995/iaaf-world-championships-gothenburg-1995-6997728/men/100-metres/final/result",  # Gothenburg 1995
-    "https://worldathletics.org/results/world-athletics-championships/1993/iaaf-world-championships-stuttgart-1993-6993598/men/100-metres/final/result",  # Stuttgart 1993
-    "https://worldathletics.org/results/world-athletics-championships/1991/iaaf-world-championships-tokyo-1991-6987209/men/100-metres/final/result",  # Tokyo 1991
-    "https://worldathletics.org/results/world-athletics-championships/1987/iaaf-world-championships-rome-1987-6986221/men/100-metres/final/result",  # Rome 1987
-    "https://worldathletics.org/results/world-athletics-championships/1983/iaaf-world-championships-helsinki-1983-6988504/men/100-metres/final/result",  # Helsinki 1983
+    "https://worldathletics.org/competition/calendar-results/results/6998524?eventId=10229630",  # Berlin 2009
+    "https://worldathletics.org/competition/calendar-results/results/6903480?eventId=10229630",  # Osaka 2007
+    "https://worldathletics.org/competition/calendar-results/results/6937596?eventId=10229630",  # Helsinki 2005
+    "https://worldathletics.org/competition/calendar-results/results/6930156?eventId=10229630",  # Paris/Saint-Denis 2003
+    "https://worldathletics.org/competition/calendar-results/results/6947294?eventId=10229630",  # Edmonton 2001
+    "https://worldathletics.org/competition/calendar-results/results/6939522?eventId=10229630",  # Seville 1999
+    "https://worldathletics.org/competition/calendar-results/results/6913256?eventId=10229630",  # Athens 1997
+    "https://worldathletics.org/competition/calendar-results/results/6997728?eventId=10229630",  # Gothenburg 1995
+    "https://worldathletics.org/competition/calendar-results/results/6993598?eventId=10229630",  # Stuttgart 1993
+    "https://worldathletics.org/competition/calendar-results/results/6987209?eventId=10229630",  # Tokyo 1991
+    "https://worldathletics.org/competition/calendar-results/results/6986221?eventId=10229630",  # Rome 1987
+    "https://worldathletics.org/competition/calendar-results/results/6988504?eventId=10229630",  # Helsinki 1983
 
     # Add new championship/Olympic URLs below this line:
 ]
@@ -202,9 +205,9 @@ MANUAL_DIAMOND_LEAGUE_URLS = [
 ]
 
 # World Athletics Continental Tour Gold meetings (called "IAAF World Challenge"
-# pre-2020) — the tier just below Diamond League. Same URL shape as
-# CHAMPIONSHIP_URLS above (a direct /men/100-metres/final/result page), so
-# these are scraped with scrape_race(), not scrape_hub_race(). Roughly 2016-2021
+# pre-2020) — the tier just below Diamond League. Direct
+# /men/100-metres/final/result pages, scraped with scrape_race(), not
+# scrape_hub_race(). Roughly 2016-2021
 # meetings use this flat-page format; the site never generated one for most
 # 2022+ meetings (see CONTINENTAL_TOUR_HUB_URLS below for those). 2017 has no
 # coverage — its legacy low-numbered IDs 404 on the current site, same class of

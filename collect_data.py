@@ -41,8 +41,8 @@ def scrape_url_list(urls, scrape_fn=scrape_race):
 
 
 def main():
-    print("=== Scraping championship/Olympic finals ===")
-    championship_df = scrape_url_list(CHAMPIONSHIP_URLS)
+    print("=== Scraping championships/Olympics (all rounds, hub format) ===")
+    championship_df = scrape_url_list(CHAMPIONSHIP_URLS, scrape_fn=scrape_hub_race)
 
     print("\n=== Scraping Continental Tour Gold / World Challenge finals ===")
     continental_tour_df = scrape_url_list(CONTINENTAL_TOUR_URLS)
@@ -85,7 +85,7 @@ def main():
 
     print("\n=== Expanding to semi-finals/heats ===")
     dl_race_urls_only = [u for u, venue in dl_race_urls_with_venue]
-    all_final_urls = CHAMPIONSHIP_URLS + dl_race_urls_only + CONTINENTAL_TOUR_URLS
+    all_final_urls = dl_race_urls_only + CONTINENTAL_TOUR_URLS
     expanded_urls = []
     for url in all_final_urls:
         expanded_urls.extend(generate_round_variants(url))
@@ -115,22 +115,24 @@ def main():
             lambda n: normalize_meet_name(n) if pd.notna(n) else n
         )
 
-    # Every URL we attempted this run (whether it succeeded or was correctly
-    # rejected) has been freshly re-validated, so drop any old rows for those
-    # same URLs before merging — otherwise a stale/contaminated scrape from a
-    # previous run of collect_data.py never gets replaced, it just sits
-    # alongside the new one since the rows aren't byte-identical.
-    attempted_urls = set(CHAMPIONSHIP_URLS) | set(expanded_urls) | \
-        set(DIAMOND_LEAGUE_HUB_URLS) | set(MANUAL_DIAMOND_LEAGUE_URLS) | \
-        set(dl_race_urls_only) | set(CONTINENTAL_TOUR_URLS) | set(OTHER_HUB_URLS) | \
-        set(CONTINENTAL_TOUR_HUB_URLS)
-    if not existing.empty and "source_url" in existing.columns:
-        existing = existing[~existing["source_url"].isin(attempted_urls)]
+    new_parts = [championship_df, continental_tour_df, dl_df, rounds_df,
+                 hub_df, manual_df, other_hub_df, ct_hub_df]
+    new_parts = [p for p in new_parts if not p.empty]
 
+    # Replace old rows only for URLs successfully re-scraped this run, so a
+    # stale scrape gets replaced rather than duplicated. A URL that failed
+    # this time (server error, timeout) keeps its existing rows — it used to
+    # be dropped too, so one transient failure could delete data.
+    rescraped_urls = set()
+    for p in new_parts:
+        rescraped_urls |= set(p["source_url"])
+    if not existing.empty and "source_url" in existing.columns:
+        existing = existing[~existing["source_url"].isin(rescraped_urls)]
+
+    # Skip empty frames: concatenating them is deprecated in pandas
+    # (FutureWarning about empty/all-NA entries).
     combined = pd.concat(
-        [existing, championship_df, continental_tour_df, dl_df, rounds_df,
-         hub_df, manual_df, other_hub_df, ct_hub_df],
-        ignore_index=True
+        [p for p in [existing] + new_parts if not p.empty], ignore_index=True
     )
     combined = combined.drop_duplicates()
     combined.to_csv(CSV_PATH, index=False)
@@ -150,8 +152,9 @@ def main_new_only():
     def new(urls):
         return [u for u in urls if u not in have]
 
-    flat_urls = new(CHAMPIONSHIP_URLS + CONTINENTAL_TOUR_URLS + MANUAL_DIAMOND_LEAGUE_URLS)
-    hub_urls = new(DIAMOND_LEAGUE_HUB_URLS + OTHER_HUB_URLS + CONTINENTAL_TOUR_HUB_URLS)
+    flat_urls = new(CONTINENTAL_TOUR_URLS + MANUAL_DIAMOND_LEAGUE_URLS)
+    hub_urls = new(CHAMPIONSHIP_URLS + DIAMOND_LEAGUE_HUB_URLS + OTHER_HUB_URLS
+                   + CONTINENTAL_TOUR_HUB_URLS)
     print(f"=== {len(flat_urls)} new flat-format URLs, {len(hub_urls)} new hub-format URLs ===")
     flat_df = scrape_url_list(flat_urls, scrape_fn=scrape_race)
     rounds_df = scrape_url_list(
@@ -159,10 +162,11 @@ def main_new_only():
     )
     hub_df = scrape_url_list(hub_urls, scrape_fn=scrape_hub_race)
 
-    new_rows = pd.concat([flat_df, rounds_df, hub_df], ignore_index=True)
-    if new_rows.empty:
+    parts = [p for p in [flat_df, rounds_df, hub_df] if not p.empty]
+    if not parts:
         print("Nothing new scraped; CSV unchanged.")
         return
+    new_rows = pd.concat(parts, ignore_index=True)
     combined = pd.concat([existing, new_rows], ignore_index=True).drop_duplicates()
     combined.to_csv(CSV_PATH, index=False)
     print(f"Added {len(combined) - len(existing)} rows; saved {len(combined)} total rows to {CSV_PATH}")
