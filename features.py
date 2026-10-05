@@ -12,6 +12,12 @@ import numpy as np
 # though the 2022+ gain is within noise (95% CI -0.072..+0.029).
 HALF_LIFE_DAYS = 180
 
+# Spread (see robust_spread). Tuned 2026-10-05 against the old plain std
+# over all history: pre-2022 log-loss -0.070 (95% CI -0.127..-0.009),
+# 2022+ +0.009 (CI -0.024..+0.044, i.e. no measurable change).
+SPREAD_WINDOW_DAYS = 730
+SPREAD_PRIOR_RACES = 5
+
 # Men's 100m world record is 9.58s; even a weak heat qualifier at the
 # competition levels this scraper covers finishes well under 13s. Times
 # outside this band (e.g. one row records 45.12s) were checked against the
@@ -263,6 +269,24 @@ def compute_reliability_before(cutoff_date, df, prior_strength=8):
     })
 
 
+def robust_spread(valid, cutoff_date, window_days=SPREAD_WINDOW_DAYS, prior_races=SPREAD_PRIOR_RACES):
+    """How much an athlete's adjusted times scatter, for the simulation.
+
+    Uses the median absolute deviation (x1.4826 to match a normal sigma) over
+    the last window_days only, so one bad old race (an injury, a jog-through
+    heat) doesn't inflate it — a plain std over all history made erratic
+    athletes look like they had more upside. Shrunk toward the field's typical
+    spread by prior_races pseudo-races so a handful of results can't give an
+    implausibly tight or wide spread."""
+    recent = valid[valid["date"] >= cutoff_date - pd.Timedelta(days=window_days)]
+    g = recent.groupby("ATHLETE")["adj_time"]
+    mad = (recent["adj_time"] - g.transform("median")).abs().groupby(recent["ATHLETE"]).median() * 1.4826
+    n = g.size()
+    pooled = np.nanmedian(mad[n >= 3]) if (n >= 3).any() else 0.08
+    dof = (n - 1).clip(lower=0)
+    return np.sqrt((dof * mad ** 2 + prior_races * pooled ** 2) / (dof + prior_races))
+
+
 def compute_stats_before(cutoff_date, df, half_life_days=HALF_LIFE_DAYS):
     """Recency-weighted stats using only races strictly before cutoff_date.
     Prevents leaking a target race's own result into an athlete's 'known form'.
@@ -281,7 +305,7 @@ def compute_stats_before(cutoff_date, df, half_life_days=HALF_LIFE_DAYS):
     stats = pd.DataFrame({
         "weighted_avg_time": g["wt"].sum() / g["w"].sum(),
         "races_used": g.size().astype(float),
-        "consistency": g["adj_time"].std(),
+        "consistency": robust_spread(valid, cutoff_date),
     }).reindex(athletes)
     stats["races_used"] = stats["races_used"].fillna(0.0)
 
