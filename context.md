@@ -13,9 +13,10 @@ Paste this into a new conversation to resume work on this project.
 ## Working rule — commit regularly
 
 - **Commit after every meaningful step** (a bug fix, a feature, a dataset
-  rebuild, a doc update). Don't let uncommitted work pile up. Use small,
-  focused commits with conventional prefixes (`feat:`, `fix:`, `chore:`,
-  `docs:`), and push to `origin/main` so progress is saved off-machine.
+  rebuild, a doc update). Don't let uncommitted work pile up. Keep commit
+  messages short and plain, one line (e.g. "add 2026 meets", "fix wind for
+  heats") — no long bodies, no Co-Authored-By lines. Push to `origin/main`
+  so progress is saved off-machine.
 - Commit a dataset rebuild separately from code changes, so a bad
   rescrape can be reverted on its own.
 - Update this file at the end of each session, and commit it.
