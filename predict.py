@@ -49,22 +49,21 @@ def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1):
     if missing:
         print(f"Warning: excluded (no data or below min_races={min_races}): {missing}")
 
-    wins = {name: 0 for name in field.index}
+    if field.empty:
+        return pd.Series(dtype=float)
 
-    for _ in range(n_simulations):
-        simulated_times = {}
-        for name, row in field.iterrows():
-            finish_rate = row["finish_rate"] if pd.notna(row.get("finish_rate")) else fallback_finish_rate
-            if np.random.random() > finish_rate:
-                continue  # simulated DNF/DQ/false start — not in this run's field
-            std = row["consistency"] if pd.notna(row.get("consistency")) else fallback_std
-            simulated_times[name] = np.random.normal(row["weighted_avg_time"], std)
-        if not simulated_times:
-            continue  # everyone simulated a non-finish this run (very rare)
-        winner = min(simulated_times, key=simulated_times.get)
-        wins[winner] += 1
+    mu = field["weighted_avg_time"].to_numpy(dtype=float)
+    sd = field["consistency"].fillna(fallback_std).to_numpy(dtype=float)
+    fr = field["finish_rate"].fillna(fallback_finish_rate).to_numpy(dtype=float)
 
-    win_probs = pd.Series(wins) / n_simulations
+    # All runs at once: one row per simulated race, one column per athlete.
+    finished = np.random.random((n_simulations, len(field))) <= fr
+    times = np.where(finished, np.random.normal(mu, sd, (n_simulations, len(field))), np.inf)
+    someone_finished = finished.any(axis=1)  # everyone DNF-ing is very rare; no winner
+    winners = times[someone_finished].argmin(axis=1)
+    wins = np.bincount(winners, minlength=len(field))
+
+    win_probs = pd.Series(wins, index=field.index) / n_simulations
     return win_probs.sort_values(ascending=False)
 
 
