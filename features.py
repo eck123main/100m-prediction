@@ -59,6 +59,12 @@ def load_clean_data(csv_path="100m_races_dataset.csv"):
     df["ATHLETE"] = df["ATHLETE"].str.strip().str.title().replace(ATHLETE_ALIASES)
     df["date"] = pd.to_datetime(df["date"], format="%d/%m/%Y %H:%M:%S", errors="coerce")
 
+    # Hand-timed marks ("10.1h") parse to no time. They're neither a usable
+    # time (0.1s resolution) nor a non-finish, so drop them rather than let
+    # reliability count them as DNFs.
+    hand_timed = df["time"].isna() & df["record_flag"].astype(str).str.fullmatch(r"\d+(\.\d+)?h")
+    df = df[~hand_timed].copy()
+
     implausible = (df["time"] < MIN_PLAUSIBLE_TIME) | (df["time"] > MAX_PLAUSIBLE_TIME)
     df.loc[implausible, "time"] = np.nan
 
