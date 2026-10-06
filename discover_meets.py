@@ -8,6 +8,7 @@ each competition we don't already have. Prints the new meetings as hub URLs
 
     py -3.14 discover_meets.py                     # current season
     py -3.14 discover_meets.py --years 2024 2025   # earlier seasons
+    py -3.14 discover_meets.py --indoor-60m --years 2025 2026   # indoor 60m meets
 
 Earlier seasons come from the same data API the athlete profile page uses
 when you switch year; its public key is read from the site's own config.
@@ -24,14 +25,17 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
-from links import CHAMPIONSHIP_URLS, CONTINENTAL_TOUR_HUB_URLS, DIAMOND_LEAGUE_HUB_URLS, OTHER_HUB_URLS
+from links import (CHAMPIONSHIP_URLS, CONTINENTAL_TOUR_HUB_URLS, DIAMOND_LEAGUE_HUB_URLS, INDOOR_60M_URLS,
+                   OTHER_HUB_URLS)
 from scraper import fetch
 
 CSV_PATH = "100m_races_dataset.csv"
 START_DATE = "2024-01-01"
 MAX_TIME = 10.30
-HUB_URL = "https://worldathletics.org/competition/calendar-results/results/{}?eventId=10229630"
+HUB_URL = "https://worldathletics.org/competition/calendar-results/results/{}?eventId={}"
 OUT_PATH = "discovered_meets.csv"
+# (discipline name in profile results, indoor?, WA event id for the hub URL)
+EVENTS = {"100m": ("100 Metres", False, "10229630"), "60m": ("60 Metres", True, "10229683")}
 
 
 def page_data(url):
@@ -81,8 +85,9 @@ def graphql_config():
     raise RuntimeError("Couldn't find the GraphQL config on worldathletics.org")
 
 
-def season_100m(slug, year, api):
-    """An athlete's outdoor 100m results for one season."""
+def season_results(slug, year, api, event="100m"):
+    """An athlete's results in one event (default outdoor 100m) for one season."""
+    discipline, indoor, _ = EVENTS[event]
     endpoint, key = api
     athlete_id = int(slug.rsplit("-", 1)[1])
     time.sleep(random.uniform(0.4, 1.0))  # same politeness as scraper.fetch
@@ -93,14 +98,16 @@ def season_100m(slug, year, api):
         events = resp.json()["data"]["getSingleCompetitorResultsDiscipline"]["resultsByEvent"]
     except Exception:
         return []
-    return [r for e in events if e.get("discipline") == "100 Metres" and not e.get("indoor")
+    return [r for e in events if e.get("discipline") == discipline and bool(e.get("indoor")) == indoor
             for r in e["results"]]
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--years", type=int, nargs="+", default=[pd.Timestamp.now().year])
-    years = parser.parse_args().years
+    parser.add_argument("--indoor-60m", action="store_true", help="find indoor 60m meets instead")
+    args = parser.parse_args()
+    years, event = args.years, ("60m" if args.indoor_60m else "100m")
 
     df = pd.read_csv(CSV_PATH)
     df["date"] = pd.to_datetime(df["date"], format="%d/%m/%Y %H:%M:%S", errors="coerce")
@@ -119,10 +126,12 @@ def main():
     api = graphql_config()
     jobs = [(slug, year) for slug in targets for year in years]
     with ThreadPoolExecutor(4) as ex:
-        results = [r for rs in ex.map(lambda j: season_100m(j[0], j[1], api), jobs) for r in rs]
+        results = [r for rs in ex.map(lambda j: season_results(j[0], j[1], api, event), jobs) for r in rs]
 
     known = set()
-    for u in CHAMPIONSHIP_URLS + DIAMOND_LEAGUE_HUB_URLS + OTHER_HUB_URLS + CONTINENTAL_TOUR_HUB_URLS:
+    known_urls = (INDOOR_60M_URLS if event == "60m" else
+                  CHAMPIONSHIP_URLS + DIAMOND_LEAGUE_HUB_URLS + OTHER_HUB_URLS + CONTINENTAL_TOUR_HUB_URLS)
+    for u in known_urls:
         known |= set(re.findall(r"(\d{7})", u))
     meets = (pd.DataFrame(results)
              .groupby("competitionId")
@@ -130,7 +139,7 @@ def main():
                   category=("category", "first"), athletes=("mark", "size"))
              .reset_index())
     meets = meets[~meets["competitionId"].isin(known)].sort_values("athletes", ascending=False)
-    meets["url"] = meets["competitionId"].map(HUB_URL.format)
+    meets["url"] = meets["competitionId"].map(lambda cid: HUB_URL.format(cid, EVENTS[event][2]))
     meets.to_csv(OUT_PATH, index=False)
     print(f"\n{len(meets)} meetings not in links.py (saved to {OUT_PATH}):")
     print(meets[["date", "category", "athletes", "competition"]].head(40).to_string(index=False))

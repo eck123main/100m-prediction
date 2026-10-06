@@ -2339,3 +2339,8 @@ OTHER_HUB_URLS = [
 # located via search in the time budgeted): RSA 2018-2020/2026; Kenya 2018-2022/2026;
 # Botswana 2018-2020/2022/2024; France 2019/2020; Japan 2019-2022/2024/2026. A
 # follow-up search pass targeting these specific gap-years would likely find more.
+
+# Indoor men's 60m meetings (scraped into 60m_indoor_dataset.csv, used as
+# early-season form). Found with: py -3.14 discover_meets.py --indoor-60m --years ...
+INDOOR_60M_URLS = [
+]
