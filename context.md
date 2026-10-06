@@ -21,7 +21,7 @@ Paste this into a new conversation to resume work on this project.
   rescrape can be reverted on its own.
 - Update this file at the end of each session, and commit it.
 
-## START HERE — status at end of 2026-10-05 session
+## START HERE — status at end of 2026-10-06 session
 
 **The model works and is live.** Website (Streamlit Community Cloud, from
 this repo, branch `main`, file `app.py`):
@@ -30,9 +30,9 @@ private; the app was deployed by the user's eck123main Streamlit account —
 if that URL doesn't open, find the app under "My apps" at share.streamlit.io).
 Pushing to `main` redeploys it automatically.
 
-**Data:** 57,109 rows (`100m_races_dataset.csv`), through 2026-09-23.
+**Data:** 81,123 rows (`100m_races_dataset.csv`), through 2026-09-23.
 Dense 2012-2026 elite meets, every round of every Worlds/Olympics back to
-1983, plus ~1,150 extra 2024-2026 meetings (NCAA, national champs, area
+1983, plus ~1,880 extra 2023-2026 meetings (NCAA, national champs, area
 champs, smaller invitationals) found via athlete profiles.
 
 **Model** (features.py + predict.py):
@@ -43,16 +43,20 @@ champs, smaller invitationals) found via athlete profiles.
   with head-to-head Elo (each heat rated as its own race).
 - Hand-timed marks dropped; `ATHLETE_ALIASES` merges name variants.
 
-**Backtest** (`py -3.14 backtest.py`, ~5 min; writes `backtest_results.csv`,
+**Backtest** (`py -3.14 backtest.py`, ~5-8 min; writes `backtest_results.csv`,
 which is committed so the website loads fast — re-run and commit it after
 any model change):
-- Original 295 elite finals: **51.2% top-1**, log-loss **1.421**, cold
-  start 1.7%. Fastest-adjusted-time rule gets ~52% top-1, so the model's
-  value is calibrated probabilities, not more correct picks.
-- All 3,219 finals: 45.7% top-1 (58.0% excl. the 21% cold starts — most new
-  lower-level meets have no pre-2024 history yet).
-- Calibration (elite finals): middle buckets well calibrated; top end still
-  overconfident (~77% said -> ~67% won).
+- Original 295 elite finals: **50.8% top-1**, log-loss **1.424**, cold
+  start 1.7%. Fastest-adjusted-time rule ~51.5% top-1, so the model's value
+  is calibrated probabilities, not more correct picks.
+- 2024+ finals (3,033): 47.0% top-1, log-loss 2.000, cold start 13.7%
+  (was 22.6% before the 2023 data).
+- All 4,654 finals: 45.3% top-1 (56.3% excl. cold starts, 19.6%).
+- **Calibration is fine once cold starts are excluded** (elite finals: ~74%
+  said -> ~72% won; ~45% -> ~48%). The earlier "overconfident top end" was
+  races won by athletes with no history (the model gives them 0%). Tested
+  shrinking toward uniform (p' = (1-a)p + a/n): pre-2022 prefers a=0, so
+  rejected. The fix for calibration is more data (fewer cold starts).
 
 **Honest standing vs Velocitra** (B2B odds supplier to sportsbooks, built on
 the Tilastopaja database): we can't match their breadth; aim is depth on the
@@ -61,23 +65,28 @@ odds — tooling is ready (`--odds`), needs live 2027 races.
 
 ### Next steps (agreed plan, in order)
 
-1. **`py -3.14 discover_meets.py --years 2023`** -> add the meetings it lists
-   (>=2 results) to the bottom of `OTHER_HUB_URLS` in `links.py` (same as
-   the 2024-25 block) -> `py -3.14 collect_data.py --new-only` (~40 min, runs
-   silently until done) -> sanity-check rows -> commit links, then data ->
-   `py -3.14 backtest.py` -> commit `backtest_results.csv`. Goal: cut the
-   21% cold-start rate.
-2. **Indoor 60m** as early-season form (profiles/API include indoor events;
-   needs a scale conversion 60m -> 100m and a flag).
-3. **Top-end overconfidence**: tried and rejected so far — temperature
-   scaling, spread shrinkage, spread scaling. Untried: isotonic mapping on
-   top-pick prob, Plackett-Luce ranking model.
-4. **Live test in 2027**: before big races
+1. **Indoor 60m** (groundwork done, not yet run):
+   - `scraper.scrape_hub_race(url, "Men's 60 Metres")` works (tested on the
+     2026 World Indoors, competition 7199326).
+   - Run `py -3.14 discover_meets.py --indoor-60m --years 2023 2024 2025 2026`
+     -> paste meetings (>=2 results) into `INDOOR_60M_URLS` in `links.py`
+     (URLs use eventId=10229683) -> `py -3.14 collect_data.py --indoor-60m`
+     -> writes `60m_indoor_dataset.csv`.
+   - Then in features.py: estimate a 60m -> 100m conversion from athletes
+     who ran both in the same season, add converted 60m results to form
+     history with a tuned weight (try 0 / 0.5 / 1; choose on pre-2022 is
+     impossible since 60m data starts 2023 — use 2023-24 to tune, 2025-26
+     to confirm), excluded from Elo and reliability.
+2. **Fewer cold starts**: `discover_meets.py --years 2022` (same flow as
+   2023: >=2 results -> bottom of OTHER_HUB_URLS -> `collect_data.py
+   --new-only`, now ~30 min with progress output; known-empty URLs are
+   skipped via `no_100m_urls.txt`).
+3. **Live test in 2027**: before big races
    `py -3.14 predict.py --startlist <url> --log --odds "Name=2.5,..."`,
    commit `predictions_log.csv`; after: `py -3.14 score_predictions.py`.
    Also verifies hub start-list parsing (`scraper._hub_start_list_names`),
    never seen live.
-5. Tuning rule used throughout: choose on finals before 2022, confirm on
+4. Tuning rule used throughout: choose on finals before 2022, confirm on
    2022+ with a paired bootstrap; only adopt if it doesn't hurt 2022+.
 
 ### Commands cheat sheet
@@ -87,8 +96,9 @@ py -3.14 predict.py "Noah Lyles" "Oblique Seville" ...        # predict
 py -3.14 predict.py --startlist <WA url> [--before YYYY-MM-DD] [--log] [--odds "..."]
 py -3.14 score_predictions.py                                # grade logged predictions
 py -3.14 backtest.py                                         # ~5 min
-py -3.14 discover_meets.py [--years 2023 2024]               # find missing meetings
-py -3.14 collect_data.py --new-only                          # scrape new links.py URLs
+py -3.14 discover_meets.py [--years 2023 2024] [--indoor-60m]  # find missing meetings
+py -3.14 collect_data.py --new-only [--retry-failed]         # scrape new links.py URLs
+py -3.14 collect_data.py --indoor-60m                        # scrape INDOOR_60M_URLS
 py -3.14 -m streamlit run app.py                             # website locally
 ```
 
@@ -128,7 +138,8 @@ scraped from worldathletics.org (see START HERE for current numbers).
 | `links.py` | Every source URL (CHAMPIONSHIP_URLS, DIAMOND_LEAGUE_HUB_URLS, OTHER_HUB_URLS, CONTINENTAL_TOUR_*) — mostly generic hub URLs `competition/calendar-results/results/{id}?eventId=10229630` |
 | `scraper.py` | `scrape_hub_race` (hub JSON, tier allowlist `ELITE_HUB_TIERS`, per-race dates/wind/heat), `scrape_race` (old flat pages), `fetch_start_list` |
 | `collect_data.py` | Rebuild (`main`) or add only new URLs (`--new-only`, safe) |
-| `discover_meets.py` | Find meetings we lack from athlete profiles / WA GraphQL (`--years`) |
+| `discover_meets.py` | Find meetings we lack from athlete profiles / WA GraphQL (`--years`, `--indoor-60m`); caches profile links in `athlete_slugs.json` |
+| `no_100m_urls.txt` | links.py URLs with no usable men's 100m (skipped by `--new-only`) |
 | `features.py` | Cleaning, wind/round adjustment, robust spread, reliability, Elo, `compute_stats_before` (leak-free) |
 | `predict.py` | Monte Carlo + Elo blend; CLI with `--startlist`, `--before`, `--log`, `--odds` |
 | `backtest.py` | Leak-free backtest over every real final; Elo weight grid with train/test split |
@@ -454,3 +465,16 @@ indoor 60m as early-season form, then top-end calibration.
   calibration ~77% said -> 67% won (was 64%).
 - 21% cold starts across all finals: most new meets are lower level and 2024
   is their first year of data. `discover_meets.py --years 2023` would help.
+
+### Session 2026-10-06
+
+- 2023 season: `discover_meets.py --years 2023` (887 athletes) -> 935 missing
+  meetings, kept 740 with >=2 results; 724 scraped (+24,014 rows -> 81,123).
+  2024+ finals: cold start 22.6% -> 13.7%, log-loss 2.451 -> 2.000.
+- collect_data: progress printed with flush; permanent failures recorded in
+  `no_100m_urls.txt` and skipped next time (seeded with 74 from logs).
+- discover_meets: profile-link cache (`athlete_slugs.json`), `--indoor-60m`.
+- scraper: `scrape_hub_race(url, event_name)` for any event; per-event
+  plausible ranges (`PLAUSIBLE_RANGE`).
+- Calibration: shrink-toward-uniform rejected (see START HERE); top-end
+  overconfidence was cold starts.
