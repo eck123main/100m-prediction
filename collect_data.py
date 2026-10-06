@@ -4,7 +4,7 @@ Run this file directly to (re)build 100m_races_dataset.csv from scratch:
 
 Or, to only scrape links.py URLs that aren't in the CSV yet (fast, and never
 touches existing rows — use this after adding new meetings to links.py):
-    python collect_data.py --new-only
+    python collect_data.py --new-only [--retry-failed]
 
 Indoor 60m (INDOOR_60M_URLS -> 60m_indoor_dataset.csv):
     python collect_data.py --indoor-60m
@@ -25,11 +25,28 @@ from links import (
 
 CSV_PATH = "100m_races_dataset.csv"
 INDOOR_60M_CSV = "60m_indoor_dataset.csv"
+# links.py URLs that turned out to have no usable men's 100m; --new-only skips them
+SKIP_PATH = "no_100m_urls.txt"
 
 
-def scrape_url_list(urls, scrape_fn=scrape_race):
+def is_permanent_failure(error):
+    """True when retrying won't help: the page has no usable men's 100m (WA
+    answers a hub URL for a meeting without the event with a 500), as opposed
+    to a timeout or dropped connection."""
+    return isinstance(error, ValueError) or "500 Server Error" in str(error) or "404" in str(error)
+
+
+def load_skip_list():
+    try:
+        return set(open(SKIP_PATH, encoding="utf-8").read().split())
+    except FileNotFoundError:
+        return set()
+
+
+def scrape_url_list(urls, scrape_fn=scrape_race, skip_log=None):
     """Scrape a list of URLs with the given scrape function, printing progress.
-    Returns a combined DataFrame."""
+    Returns a combined DataFrame. If skip_log is a set, URLs that fail
+    permanently are added to it."""
     all_races = []
     for i, u in enumerate(urls, start=1):
         # flush so progress shows up even when output goes to a file
@@ -40,6 +57,8 @@ def scrape_url_list(urls, scrape_fn=scrape_race):
         except Exception as e:
             print(f"[{i}/{len(urls)}] FAILED: {u}", flush=True)
             print(f"   error: {e}", flush=True)
+            if skip_log is not None and is_permanent_failure(e):
+                skip_log.add(u)
     if not all_races:
         return pd.DataFrame()
     return pd.concat(all_races, ignore_index=True)
@@ -152,7 +171,9 @@ def main_new_only():
     discovery and old-style round-variant expansion (both only apply to
     historical meetings already in the dataset)."""
     existing = pd.read_csv(CSV_PATH)
-    have = set(existing["source_url"].dropna())
+    retry = "--retry-failed" in sys.argv
+    skip = set() if retry else load_skip_list()
+    have = set(existing["source_url"].dropna()) | skip
 
     def new(urls):
         return [u for u in urls if u not in have]
@@ -160,12 +181,18 @@ def main_new_only():
     flat_urls = new(CONTINENTAL_TOUR_URLS + MANUAL_DIAMOND_LEAGUE_URLS)
     hub_urls = new(CHAMPIONSHIP_URLS + DIAMOND_LEAGUE_HUB_URLS + OTHER_HUB_URLS
                    + CONTINENTAL_TOUR_HUB_URLS)
-    print(f"=== {len(flat_urls)} new flat-format URLs, {len(hub_urls)} new hub-format URLs ===")
+    print(f"=== {len(flat_urls)} new flat-format URLs, {len(hub_urls)} new hub-format URLs "
+          f"({len(skip)} known-empty URLs skipped; --retry-failed to include them) ===")
+    failed = set()
     flat_df = scrape_url_list(flat_urls, scrape_fn=scrape_race)
     rounds_df = scrape_url_list(
         [v for u in flat_urls for v in generate_round_variants(u)], scrape_fn=scrape_race
     )
-    hub_df = scrape_url_list(hub_urls, scrape_fn=scrape_hub_race)
+    hub_df = scrape_url_list(hub_urls, scrape_fn=scrape_hub_race, skip_log=failed)
+    if failed:
+        all_skips = (load_skip_list() | failed) - set(hub_df["source_url"] if not hub_df.empty else [])
+        open(SKIP_PATH, "w", encoding="utf-8").write("\n".join(sorted(all_skips)) + "\n")
+        print(f"Recorded {len(failed)} URLs with no usable men's 100m in {SKIP_PATH}")
 
     parts = [p for p in [flat_df, rounds_df, hub_df] if not p.empty]
     if not parts:
