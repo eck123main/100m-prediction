@@ -27,14 +27,15 @@ def scrape_url_list(urls, scrape_fn=scrape_race):
     """Scrape a list of URLs with the given scrape function, printing progress.
     Returns a combined DataFrame."""
     all_races = []
-    for u in urls:
+    for i, u in enumerate(urls, start=1):
+        # flush so progress shows up even when output goes to a file
         try:
             race = scrape_fn(u)
             all_races.append(race)
-            print(f"OK ({len(race)} rows): {u}")
+            print(f"[{i}/{len(urls)}] OK ({len(race)} rows): {u}", flush=True)
         except Exception as e:
-            print(f"FAILED: {u}")
-            print(f"   error: {e}")
+            print(f"[{i}/{len(urls)}] FAILED: {u}", flush=True)
+            print(f"   error: {e}", flush=True)
     if not all_races:
         return pd.DataFrame()
     return pd.concat(all_races, ignore_index=True)
