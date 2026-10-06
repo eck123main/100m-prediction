@@ -5,6 +5,9 @@ Run this file directly to (re)build 100m_races_dataset.csv from scratch:
 Or, to only scrape links.py URLs that aren't in the CSV yet (fast, and never
 touches existing rows — use this after adding new meetings to links.py):
     python collect_data.py --new-only
+
+Indoor 60m (INDOOR_60M_URLS -> 60m_indoor_dataset.csv):
+    python collect_data.py --indoor-60m
 """
 
 import sys
@@ -21,6 +24,7 @@ from links import (
 )
 
 CSV_PATH = "100m_races_dataset.csv"
+INDOOR_60M_CSV = "60m_indoor_dataset.csv"
 
 
 def scrape_url_list(urls, scrape_fn=scrape_race):
@@ -173,8 +177,30 @@ def main_new_only():
     print(f"Added {len(combined) - len(existing)} rows; saved {len(combined)} total rows to {CSV_PATH}")
 
 
+def main_indoor_60m():
+    """Scrape INDOOR_60M_URLS not yet in the 60m CSV (separate from the 100m
+    data; used as early-season form). Never drops existing rows."""
+    from links import INDOOR_60M_URLS
+    try:
+        existing = pd.read_csv(INDOOR_60M_CSV)
+    except FileNotFoundError:
+        existing = pd.DataFrame()
+    have = set(existing["source_url"]) if not existing.empty else set()
+    urls = [u for u in INDOOR_60M_URLS if u not in have]
+    print(f"=== {len(urls)} new indoor 60m URLs ===")
+    new_rows = scrape_url_list(urls, scrape_fn=lambda u: scrape_hub_race(u, "Men's 60 Metres"))
+    if new_rows.empty:
+        print("Nothing new scraped; CSV unchanged.")
+        return
+    combined = pd.concat([p for p in [existing, new_rows] if not p.empty], ignore_index=True).drop_duplicates()
+    combined.to_csv(INDOOR_60M_CSV, index=False)
+    print(f"Added {len(combined) - len(existing)} rows; saved {len(combined)} total rows to {INDOOR_60M_CSV}")
+
+
 if __name__ == "__main__":
-    if "--new-only" in sys.argv:
+    if "--indoor-60m" in sys.argv:
+        main_indoor_60m()
+    elif "--new-only" in sys.argv:
         main_new_only()
     else:
         main()

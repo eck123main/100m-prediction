@@ -34,6 +34,7 @@ START_DATE = "2024-01-01"
 MAX_TIME = 10.30
 HUB_URL = "https://worldathletics.org/competition/calendar-results/results/{}?eventId={}"
 OUT_PATH = "discovered_meets.csv"
+SLUG_CACHE = "athlete_slugs.json"
 # (discipline name in profile results, indoor?, WA event id for the hub URL)
 EVENTS = {"100m": ("100 Metres", False, "10229630"), "60m": ("60 Metres", True, "10229683")}
 
@@ -114,12 +115,22 @@ def main():
     recent = df[df["date"] >= START_DATE]
     fast = set(recent.loc[recent["time"] <= MAX_TIME, "ATHLETE"].str.strip().str.title())
     recent_hubs = [u for u in recent["source_url"].unique() if "calendar-results" in u]
-    print(f"{len(fast)} athletes at <= {MAX_TIME}s since {START_DATE}; reading {len(recent_hubs)} meetings for profile links")
 
+    # Profile links per meeting page are cached, so re-runs only read new pages.
+    try:
+        cache = json.load(open(SLUG_CACHE, encoding="utf-8"))
+    except FileNotFoundError:
+        cache = {}
+    to_read = [u for u in recent_hubs if u not in cache]
+    print(f"{len(fast)} athletes at <= {MAX_TIME}s since {START_DATE}; "
+          f"reading {len(to_read)} new meetings for profile links ({len(recent_hubs) - len(to_read)} cached)")
     with ThreadPoolExecutor(4) as ex:
-        slugs = {}
-        for s in ex.map(athlete_slugs, recent_hubs):
-            slugs.update(s)
+        for u, s in zip(to_read, ex.map(athlete_slugs, to_read)):
+            cache[u] = s
+    json.dump(cache, open(SLUG_CACHE, "w", encoding="utf-8"), ensure_ascii=False)
+    slugs = {}
+    for u in recent_hubs:
+        slugs.update(cache[u])
     targets = sorted({slugs[a] for a in fast if a in slugs})
     print(f"Found profiles for {len(targets)} of them; reading {years} results")
 
