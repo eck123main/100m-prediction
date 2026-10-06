@@ -224,7 +224,11 @@ def _parse_wind(wind_value):
 ELITE_HUB_TIERS = ["Diamond Discipline", None, "Promotional Events", "Invitational Events"]
 
 
-def scrape_hub_race(url):
+# Plausible winning-to-tail-end times per event, for the wrong-table check.
+PLAUSIBLE_RANGE = {"Men's 100 Metres": (9.4, 11.5), "Men's 60 Metres": (6.3, 7.4)}
+
+
+def scrape_hub_race(url, event_name="Men's 100 Metres"):
     """Scrape a men's 100m result from a World Athletics 'hub' page —
     a calendar-results/{id}(/result) page that embeds every event's results
     for the whole meeting on one page. Used for Diamond League meetings and
@@ -263,7 +267,7 @@ def scrape_hub_race(url):
     # pick the most-preferred tier that actually contains the event.
     sections_with_100m = [
         et for et in calendar_results["eventTitles"]
-        if any(e.get("event") == "Men's 100 Metres" for e in et.get("events", []))
+        if any(e.get("event") == event_name for e in et.get("events", []))
     ]
     main_section = next(
         (et for tier in ELITE_HUB_TIERS for et in sections_with_100m
@@ -271,14 +275,14 @@ def scrape_hub_race(url):
         None,
     )
     if main_section is None:
-        raise ValueError("No elite-tier section with Men's 100 Metres on this page")
+        raise ValueError(f"No elite-tier section with {event_name} on this page")
 
     event = next(
-        (e for e in main_section["events"] if e.get("event") == "Men's 100 Metres"),
+        (e for e in main_section["events"] if e.get("event") == event_name),
         None,
     )
     if event is None:
-        raise ValueError("Men's 100 Metres is not an elite-tier event at this meeting")
+        raise ValueError(f"{event_name} is not an elite-tier event at this meeting")
 
     venue = competition.get("venue")
     meet_name = normalize_meet_name(competition.get("name"))
@@ -316,13 +320,13 @@ def scrape_hub_race(url):
 
     results_table = pd.DataFrame(rows)
     if results_table.empty or "MARK" not in results_table.columns:
-        raise ValueError("Diamond Discipline Men's 100 Metres section has no results")
+        raise ValueError(f"{event_name} section has no results")
 
     results_table = _drop_non_sprint_marks(results_table)
     results_table[["time", "record_flag"]] = results_table["MARK"].apply(
         lambda m: pd.Series(clean_mark(m))
     )
-    _check_plausible_sprint_times(results_table)
+    _check_plausible_sprint_times(results_table, *PLAUSIBLE_RANGE.get(event_name, (9.4, 11.5)))
 
     return results_table[RESULT_COLUMNS]
 def get_mens_100m_url(meeting_url):
