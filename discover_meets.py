@@ -35,8 +35,10 @@ MAX_TIME = 10.30
 HUB_URL = "https://worldathletics.org/competition/calendar-results/results/{}?eventId={}"
 OUT_PATH = "discovered_meets.csv"
 SLUG_CACHE = "athlete_slugs.json"
-# (discipline name in profile results, indoor?, WA event id for the hub URL)
-EVENTS = {"100m": ("100 Metres", False, "10229630"), "60m": ("60 Metres", True, "10229683")}
+# (discipline name in profile results, WA event id for the hub URL). The API's
+# "indoor" field is always empty, so the discipline name is what identifies
+# the event (men's 60m is almost entirely an indoor event).
+EVENTS = {"100m": ("100 Metres", "10229630"), "60m": ("60 Metres", "10229683")}
 
 
 def page_data(url):
@@ -88,7 +90,7 @@ def graphql_config():
 
 def season_results(slug, year, api, event="100m"):
     """An athlete's results in one event (default outdoor 100m) for one season."""
-    discipline, indoor, _ = EVENTS[event]
+    discipline, _ = EVENTS[event]
     endpoint, key = api
     athlete_id = int(slug.rsplit("-", 1)[1])
     time.sleep(random.uniform(0.4, 1.0))  # same politeness as scraper.fetch
@@ -99,8 +101,7 @@ def season_results(slug, year, api, event="100m"):
         events = resp.json()["data"]["getSingleCompetitorResultsDiscipline"]["resultsByEvent"]
     except Exception:
         return []
-    return [r for e in events if e.get("discipline") == discipline and bool(e.get("indoor")) == indoor
-            for r in e["results"]]
+    return [r for e in events if e.get("discipline") == discipline for r in e["results"]]
 
 
 def main():
@@ -141,6 +142,9 @@ def main():
     with ThreadPoolExecutor(4) as ex:
         results = [r for rs in ex.map(lambda j: season_results(j[0], j[1], api, event), jobs) for r in rs]
 
+    if not results:
+        print("No results found for these athletes/seasons.")
+        return
     known = set()
     known_urls = (INDOOR_60M_URLS if event == "60m" else
                   CHAMPIONSHIP_URLS + DIAMOND_LEAGUE_HUB_URLS + OTHER_HUB_URLS + CONTINENTAL_TOUR_HUB_URLS)
@@ -152,7 +156,7 @@ def main():
                   category=("category", "first"), athletes=("mark", "size"))
              .reset_index())
     meets = meets[~meets["competitionId"].isin(known)].sort_values("athletes", ascending=False)
-    meets["url"] = meets["competitionId"].map(lambda cid: HUB_URL.format(cid, EVENTS[event][2]))
+    meets["url"] = meets["competitionId"].map(lambda cid: HUB_URL.format(cid, EVENTS[event][1]))
     meets.to_csv(OUT_PATH, index=False)
     print(f"\n{len(meets)} meetings not in links.py (saved to {OUT_PATH}):")
     print(meets[["date", "category", "athletes", "competition"]].head(40).to_string(index=False))
