@@ -3,3 +3,4 @@ __pycache__/
 .venv/
 discovered_meets.csv
 athlete_slugs.json
+athlete_results.json

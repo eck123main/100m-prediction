@@ -35,6 +35,7 @@ MAX_TIME = 10.30
 HUB_URL = "https://worldathletics.org/competition/calendar-results/results/{}?eventId={}"
 OUT_PATH = "discovered_meets.csv"
 SLUG_CACHE = "athlete_slugs.json"
+RESULTS_CACHE = "athlete_results.json"
 # (discipline name in profile results, WA event id for the hub URL). The API's
 # "indoor" field is always empty, so the discipline name is what identifies
 # the event (men's 60m is almost entirely an indoor event).
@@ -137,10 +138,26 @@ def main():
     targets = sorted({slugs[a] for a in fast if a in slugs})
     print(f"Found profiles for {len(targets)} of them; reading {years} results")
 
+    # Season results are cached per (event, athlete, year) and saved as we go,
+    # so an interrupted run resumes instead of starting over. The current
+    # season is always re-read since it can still change.
+    try:
+        res_cache = json.load(open(RESULTS_CACHE, encoding="utf-8"))
+    except FileNotFoundError:
+        res_cache = {}
+    this_year = pd.Timestamp.now().year
+    jobs = [(slug, year) for slug in targets for year in years
+            if f"{event}|{slug}|{year}" not in res_cache or year == this_year]
+    print(f"{len(jobs)} athlete-seasons to look up ({len(targets) * len(years) - len(jobs)} cached)", flush=True)
     api = graphql_config()
-    jobs = [(slug, year) for slug in targets for year in years]
     with ThreadPoolExecutor(4) as ex:
-        results = [r for rs in ex.map(lambda j: season_results(j[0], j[1], api, event), jobs) for r in rs]
+        for i, ((slug, year), rs) in enumerate(
+                zip(jobs, ex.map(lambda j: season_results(j[0], j[1], api, event), jobs)), start=1):
+            res_cache[f"{event}|{slug}|{year}"] = rs
+            if i % 200 == 0 or i == len(jobs):
+                json.dump(res_cache, open(RESULTS_CACHE, "w", encoding="utf-8"), ensure_ascii=False)
+                print(f"  season results: {i}/{len(jobs)}", flush=True)
+    results = [r for slug in targets for year in years for r in res_cache.get(f"{event}|{slug}|{year}", [])]
 
     if not results:
         print("No results found for these athletes/seasons.")
