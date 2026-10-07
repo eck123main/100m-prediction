@@ -21,7 +21,29 @@ Paste this into a new conversation to resume work on this project.
   rescrape can be reverted on its own.
 - Update this file at the end of each session, and commit it.
 
-## START HERE — status at end of 2026-10-06 session
+## START HERE — status at end of 2026-10-07 session
+
+**2026-10-07 session (5-task plan, partly done):**
+- Done: website Track record tab has an "Elite meets / All finals" toggle
+  (elite: 219 finals, ~50% top-1). 60m support in the model is coded but
+  off (`features.INDOOR_60M_WEIGHT = 0.0`; `load_indoor_60m` estimates the
+  60m->100m ratio from athletes with both in one season, needs >=20 pairs).
+- Fixed: 60m discovery found nothing because the WA API's `indoor` field is
+  always empty — now filters by discipline name. Discovery is resumable:
+  `athlete_slugs.json` (complete, 1,248 meetings) and `athlete_results.json`
+  (season lookups, saved every 200; failed lookups not cached) — both
+  gitignored, local only.
+- **In progress — resume tomorrow:** 60m discovery stopped at ~400/3,544
+  lookups (377 cached). Just re-run the same command; it continues:
+  `py -3.14 discover_meets.py --indoor-60m --years 2023 2024 2025 2026`
+  (~10-15 min left). Earlier runs were killed by Claude Code for low system
+  memory — close heavy apps, or launch Claude Code with
+  `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1`.
+- Remaining of the plan: (1) finish 60m discovery -> `INDOOR_60M_URLS` ->
+  `collect_data.py --indoor-60m`; (2) `discover_meets.py --years 2022` ->
+  OTHER_HUB_URLS -> `--new-only`; (3) tune `INDOOR_60M_WEIGHT` 0/0.5/1
+  (tune 2023-24, confirm 2025-26); (4) re-run `backtest.py`, commit
+  `backtest_results.csv`; (5) update this file/README, stop.
 
 **The model works and is live.** Website (Streamlit Community Cloud, from
 this repo, branch `main`, file `app.py`):
