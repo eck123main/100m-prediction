@@ -171,6 +171,17 @@ with replay_tab:
 # ---------------------------------------------------------------- Track record
 with record_tab:
     results = get_backtest()
+    from links import CHAMPIONSHIP_URLS, CONTINENTAL_TOUR_HUB_URLS, DIAMOND_LEAGUE_HUB_URLS
+    elite_urls = set(CHAMPIONSHIP_URLS + DIAMOND_LEAGUE_HUB_URLS + CONTINENTAL_TOUR_HUB_URLS)
+    # Old flat-format pages are all Diamond League / Continental Tour / championship finals.
+    is_elite = results["source_url"].isin(elite_urls) | ~results["source_url"].str.contains("calendar-results")
+    scope = st.segmented_control(
+        "Finals", ["Elite meets", "All finals"], default="Elite meets",
+        help="Elite = Diamond League, World Championships/Olympics and Continental Tour finals. "
+             "All finals adds national championships, NCAA and smaller meets, where many winners "
+             "have no earlier results in the data yet.")
+    if scope != "All finals":
+        results = results[is_elite]
     warm = results[results["winner_had_history"]]
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Finals tested", f"{len(results)}")
