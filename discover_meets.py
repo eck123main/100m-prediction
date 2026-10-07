@@ -101,7 +101,7 @@ def season_results(slug, year, api, event="100m"):
                                  "id": athlete_id, "resultsByYear": year, "resultsByYearOrderBy": "discipline"}})
         events = resp.json()["data"]["getSingleCompetitorResultsDiscipline"]["resultsByEvent"]
     except Exception:
-        return []
+        return None  # failed lookup: not cached, retried next run
     return [r for e in events if e.get("discipline") == discipline for r in e["results"]]
 
 
@@ -153,7 +153,8 @@ def main():
     with ThreadPoolExecutor(4) as ex:
         for i, ((slug, year), rs) in enumerate(
                 zip(jobs, ex.map(lambda j: season_results(j[0], j[1], api, event), jobs)), start=1):
-            res_cache[f"{event}|{slug}|{year}"] = rs
+            if rs is not None:
+                res_cache[f"{event}|{slug}|{year}"] = rs
             if i % 200 == 0 or i == len(jobs):
                 json.dump(res_cache, open(RESULTS_CACHE, "w", encoding="utf-8"), ensure_ascii=False)
                 print(f"  season results: {i}/{len(jobs)}", flush=True)
