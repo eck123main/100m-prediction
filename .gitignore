@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 .venv/
 discovered_meets.csv
+athlete_slugs.json
