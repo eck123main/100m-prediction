@@ -125,9 +125,11 @@ def main():
     print(f"{len(fast)} athletes at <= {MAX_TIME}s since {START_DATE}; "
           f"reading {len(to_read)} new meetings for profile links ({len(recent_hubs) - len(to_read)} cached)")
     with ThreadPoolExecutor(4) as ex:
-        for u, s in zip(to_read, ex.map(athlete_slugs, to_read)):
+        for i, (u, s) in enumerate(zip(to_read, ex.map(athlete_slugs, to_read)), start=1):
             cache[u] = s
-    json.dump(cache, open(SLUG_CACHE, "w", encoding="utf-8"), ensure_ascii=False)
+            if i % 100 == 0 or i == len(to_read):  # save as we go so an interrupted run isn't wasted
+                json.dump(cache, open(SLUG_CACHE, "w", encoding="utf-8"), ensure_ascii=False)
+                print(f"  profile links: {i}/{len(to_read)} meetings read", flush=True)
     slugs = {}
     for u in recent_hubs:
         slugs.update(cache[u])
