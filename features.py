@@ -18,6 +18,11 @@ HALF_LIFE_DAYS = 180
 SPREAD_WINDOW_DAYS = 730
 SPREAD_PRIOR_RACES = 5
 
+# Indoor 60m results (collect_data.py --indoor-60m) converted to 100m-
+# equivalents and blended into form with this weight per race (0 = off).
+INDOOR_60M_CSV = "60m_indoor_dataset.csv"
+INDOOR_60M_WEIGHT = 0.0
+
 # Men's 100m world record is 9.58s; even a weak heat qualifier at the
 # competition levels this scraper covers finishes well under 13s. Times
 # outside this band (e.g. one row records 45.12s) were checked against the
@@ -108,6 +113,7 @@ def load_clean_data(csv_path="100m_races_dataset.csv"):
     df.attrs["round_offsets"] = round_offsets
 
     df.attrs["elo_history"] = compute_elo_history(df)
+    df.attrs["indoor_60m"], df.attrs["indoor_60m_ratio"] = load_indoor_60m(df)
 
     return df
 
@@ -287,7 +293,34 @@ def robust_spread(valid, cutoff_date, window_days=SPREAD_WINDOW_DAYS, prior_race
     return np.sqrt((dof * mad ** 2 + prior_races * pooled ** 2) / (dof + prior_races))
 
 
-def compute_stats_before(cutoff_date, df, half_life_days=HALF_LIFE_DAYS):
+def load_indoor_60m(df, csv_path=INDOOR_60M_CSV):
+    """Indoor 60m results as 100m-equivalent times.
+
+    The conversion is one ratio (100m / 60m), the median over athletes who
+    ran both in the same calendar year, comparing their median adjusted 100m
+    time with their median 60m time. Returns (rows, ratio); rows is empty if
+    there's no 60m data yet."""
+    empty = pd.DataFrame(columns=["ATHLETE", "date", "adj_time"])
+    try:
+        indoor = pd.read_csv(csv_path)
+    except FileNotFoundError:
+        return empty, np.nan
+    indoor["ATHLETE"] = indoor["ATHLETE"].str.strip().str.title().replace(ATHLETE_ALIASES)
+    indoor["date"] = pd.to_datetime(indoor["date"], format="%d/%m/%Y %H:%M:%S", errors="coerce")
+    indoor = indoor[indoor["time"].between(6.3, 7.5)].dropna(subset=["date"])
+
+    key = lambda d: [d["ATHLETE"], d["date"].dt.year]
+    m60 = indoor.groupby(key(indoor))["time"].median()
+    m100 = df.dropna(subset=["adj_time", "date"])
+    m100 = m100.groupby(key(m100))["adj_time"].median()
+    pairs = pd.concat([m60.rename("t60"), m100.rename("t100")], axis=1, join="inner")
+    if len(pairs) < 20:
+        return empty, np.nan
+    ratio = (pairs["t100"] / pairs["t60"]).median()
+    return indoor.assign(adj_time=indoor["time"] * ratio)[["ATHLETE", "date", "adj_time"]], ratio
+
+
+def compute_stats_before(cutoff_date, df, half_life_days=HALF_LIFE_DAYS, indoor_weight=None):
     """Recency-weighted stats using only races strictly before cutoff_date.
     Prevents leaking a target race's own result into an athlete's 'known form'.
     Vectorized (one groupby, no per-athlete Python) — it runs once per race
@@ -299,9 +332,15 @@ def compute_stats_before(cutoff_date, df, half_life_days=HALF_LIFE_DAYS):
                                       "finish_rate", "starts", "finishes", "elo"])
 
     valid = history.dropna(subset=["adj_time", "date"])
-    weights = 0.5 ** ((cutoff_date - valid["date"]).dt.days / half_life_days)
-    g = valid.assign(w=weights, wt=weights * valid["adj_time"]).groupby("ATHLETE")
-    athletes = pd.Index(sorted(history["ATHLETE"].dropna().unique()), name="ATHLETE")
+    form_rows = valid[["ATHLETE", "date", "adj_time"]].assign(mult=1.0)
+    indoor_weight = INDOOR_60M_WEIGHT if indoor_weight is None else indoor_weight
+    indoor = df.attrs.get("indoor_60m")
+    if indoor_weight > 0 and indoor is not None and len(indoor):
+        indoor = indoor[indoor["date"] < cutoff_date]
+        form_rows = pd.concat([form_rows, indoor.assign(mult=indoor_weight)], ignore_index=True)
+    weights = form_rows["mult"] * 0.5 ** ((cutoff_date - form_rows["date"]).dt.days / half_life_days)
+    g = form_rows.assign(w=weights, wt=weights * form_rows["adj_time"]).groupby("ATHLETE")
+    athletes = pd.Index(sorted(set(history["ATHLETE"].dropna()) | set(form_rows["ATHLETE"])), name="ATHLETE")
     stats = pd.DataFrame({
         "weighted_avg_time": g["wt"].sum() / g["w"].sum(),
         "races_used": g.size().astype(float),
