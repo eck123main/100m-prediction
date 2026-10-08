@@ -46,15 +46,22 @@ Paste this into a new conversation to resume work on this project.
   worse, set `features.INDOOR_60M_WEIGHT`, re-run `backtest.py`, commit.
   Background jobs here keep getting killed for low memory — close heavy
   apps, or launch Claude Code with `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1`.
+- **Website link broken (2026-10-08):** the URL below gave "You do not have
+  access to this app or it does not exist", even signed in as eck123main
+  (the GitHub owner). Next session first: ask the user what "My apps" at
+  share.streamlit.io shows. If the app is listed, record its real URL here;
+  if not, redeploy (Create app -> repo `eck123main/100m-prediction`, branch
+  `main`, file `app.py`) and record the new URL.
 
-**The model works and is live.** Website (Streamlit Community Cloud, from
+**The model works.** Website (Streamlit Community Cloud, from
 this repo, branch `main`, file `app.py`):
-https://100m-prediction-5zcsyvwkxjrsdfmna4cfej.streamlit.app (the repo is
-private; the app was deployed by the user's eck123main Streamlit account —
-if that URL doesn't open, find the app under "My apps" at share.streamlit.io).
-Pushing to `main` redeploys it automatically.
+https://100m-prediction-5zcsyvwkxjrsdfmna4cfej.streamlit.app (currently not
+opening — see above; the repo is private; deployed from the user's
+eck123main Streamlit account). Pushing to `main` redeploys it automatically.
 
-**Data:** 81,123 rows (`100m_races_dataset.csv`), through 2026-09-23.
+**Data:** 87,261 rows (`100m_races_dataset.csv`), through 2026-09-23,
+plus 48,894 indoor 60m rows (`60m_indoor_dataset.csv`, 2023-26, unused
+until tune_indoor.py says it helps). Before 2026-10-08 there were 81,123 rows:
 Dense 2012-2026 elite meets, every round of every Worlds/Olympics back to
 1983, plus ~1,880 extra 2023-2026 meetings (NCAA, national champs, area
 champs, smaller invitationals) found via athlete profiles.
