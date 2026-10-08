@@ -309,10 +309,10 @@ def load_indoor_60m(df, csv_path=INDOOR_60M_CSV):
     indoor["date"] = pd.to_datetime(indoor["date"], format="%d/%m/%Y %H:%M:%S", errors="coerce")
     indoor = indoor[indoor["time"].between(6.3, 7.5)].dropna(subset=["date"])
 
-    key = lambda d: [d["ATHLETE"], d["date"].dt.year]
-    m60 = indoor.groupby(key(indoor))["time"].median()
+    m60 = indoor.assign(year=indoor["date"].dt.year).groupby(["ATHLETE", "year"])["time"].median()
     m100 = df.dropna(subset=["adj_time", "date"])
-    m100 = m100.groupby(key(m100))["adj_time"].median()
+    m100.attrs = {}  # see compute_reliability_before for why
+    m100 = m100.assign(year=m100["date"].dt.year).groupby(["ATHLETE", "year"])["adj_time"].median()
     pairs = pd.concat([m60.rename("t60"), m100.rename("t100")], axis=1, join="inner")
     if len(pairs) < 20:
         return empty, np.nan
