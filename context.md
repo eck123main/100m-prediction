@@ -21,7 +21,7 @@ Paste this into a new conversation to resume work on this project.
   rescrape can be reverted on its own.
 - Update this file at the end of each session, and commit it.
 
-## START HERE — status at end of 2026-10-07 session
+## START HERE — status at end of 2026-10-08 session
 
 **2026-10-07 session (5-task plan, partly done):**
 - Done: website Track record tab has an "Elite meets / All finals" toggle
@@ -33,17 +33,19 @@ Paste this into a new conversation to resume work on this project.
   `athlete_slugs.json` (complete, 1,248 meetings) and `athlete_results.json`
   (season lookups, saved every 200; failed lookups not cached) — both
   gitignored, local only.
-- **In progress — resume tomorrow:** 60m discovery stopped at ~400/3,544
-  lookups (377 cached). Just re-run the same command; it continues:
-  `py -3.14 discover_meets.py --indoor-60m --years 2023 2024 2025 2026`
-  (~10-15 min left). Earlier runs were killed by Claude Code for low system
-  memory — close heavy apps, or launch Claude Code with
-  `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1`.
-- Remaining of the plan: (1) finish 60m discovery -> `INDOOR_60M_URLS` ->
-  `collect_data.py --indoor-60m`; (2) `discover_meets.py --years 2022` ->
-  OTHER_HUB_URLS -> `--new-only`; (3) tune `INDOOR_60M_WEIGHT` 0/0.5/1
-  (tune 2023-24, confirm 2025-26); (4) re-run `backtest.py`, commit
-  `backtest_results.csv`; (5) update this file/README, stop.
+- **2026-10-08:** indoor 60m done — 1,263 meetings (2023-26) in
+  `INDOOR_60M_URLS`, 48,894 rows in `60m_indoor_dataset.csv`; 60m->100m
+  ratio 1.552 (6.50 -> 10.09). 2022 season done — 209 meetings added to
+  OTHER_HUB_URLS, +6,138 rows (dataset now 87,261). Backtest re-run and
+  committed: 2024+ finals 47.3% top-1, log-loss 1.982 (was 2.000), cold
+  starts 13.4%; 2022 finals 40.4% top-1 (28.7% cold starts).
+- **Only thing left:** `py -3.14 tune_indoor.py` (~20-30 min) decides
+  whether 60m form helps (weights 0/0.5/1, tune 2023-24, confirm 2025-26
+  with bootstrap CI). It was killed by Claude Code for low system memory
+  before printing anything. If a weight > 0 wins and the confirm CI isn't
+  worse, set `features.INDOOR_60M_WEIGHT`, re-run `backtest.py`, commit.
+  Background jobs here keep getting killed for low memory — close heavy
+  apps, or launch Claude Code with `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1`.
 
 **The model works and is live.** Website (Streamlit Community Cloud, from
 this repo, branch `main`, file `app.py`):
