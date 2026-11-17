@@ -329,7 +329,7 @@ def compute_stats_before(cutoff_date, df, half_life_days=HALF_LIFE_DAYS, indoor_
     history.attrs = {}  # see compute_reliability_before for why
     if len(history) == 0:
         return pd.DataFrame(columns=["weighted_avg_time", "races_used", "form_weight", "consistency",
-                                      "finish_rate", "starts", "finishes", "elo"])
+                                      "days_since_last", "finish_rate", "starts", "finishes", "elo"])
 
     valid = history.dropna(subset=["adj_time", "date"])
     form_rows = valid[["ATHLETE", "date", "adj_time"]].assign(mult=1.0)
@@ -348,6 +348,9 @@ def compute_stats_before(cutoff_date, df, half_life_days=HALF_LIFE_DAYS, indoor_
         # half-life ago counts 0.5). Used by predict.simulate_race's prior.
         "form_weight": g["w"].sum(),
         "consistency": robust_spread(valid, cutoff_date),
+        # Days since the athlete's latest usable time (form can drift during
+        # a layoff). Used by predict.simulate_race's form_uncertainty.
+        "days_since_last": (cutoff_date - g["date"].max()).dt.days.astype(float),
     }).reindex(athletes)
     stats["races_used"] = stats["races_used"].fillna(0.0)
     stats["form_weight"] = stats["form_weight"].fillna(0.0)

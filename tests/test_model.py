@@ -159,6 +159,34 @@ def test_sd_scale_flattens_and_default_unchanged():
     assert tight["Slow"] < base["Slow"] < wide["Slow"]
 
 
+def test_form_uncertainty_sd_formula():
+    from predict import form_uncertainty_sd
+    sd = np.array([0.1, 0.1, 0.0, 0.1])
+    w = np.array([1.0, np.nan, 10.0, 0.0])
+    days = np.array([0.0, 0.0, 365.0, np.nan])
+    assert form_uncertainty_sd(sd, w, days, None) == pytest.approx(sd)
+    out = form_uncertainty_sd(sd, w, days, {"per_race": 1.0, "drift_per_year": 0.1})
+    assert out[0] == pytest.approx(0.1 * np.sqrt(2))   # one race: mean as uncertain as a race
+    assert out[1] == pytest.approx(0.1)                # unknown weight: no extra
+    assert out[2] == pytest.approx(0.1)                # a year off: drift only
+    assert out[3] == pytest.approx(0.1 * np.sqrt(11))  # weight floored at 0.1
+
+
+def test_form_uncertainty_helps_sparse_underdog_only():
+    stats = make_stats([("Est", 9.90, 10, 6.0, 0.08, 1.0, 1500),
+                        ("New", 10.10, 1, 0.2, 0.08, 1.0, 1500)])
+    stats["days_since_last"] = [10.0, 10.0]
+    off = simulate_race(["Est", "New"], stats, method="exact", form_uncertainty=None)
+    default = simulate_race(["Est", "New"], stats, method="exact")
+    on = simulate_race(["Est", "New"], stats, method="exact", form_uncertainty={"per_race": 1.0})
+    assert default["New"] == pytest.approx(off["New"])  # FORM_UNCERTAINTY is None by default
+    assert off["New"] < on["New"] < 0.5
+    assert on.sum() == pytest.approx(1.0, abs=1e-4)
+    # works on a stats table without the new columns too
+    assert simulate_race(["Fast", "Mid"], STATS, method="exact",
+                         form_uncertainty={"drift_per_year": 0.1}).sum() == pytest.approx(1.0, abs=1e-4)
+
+
 def test_score_scales_row(monkeypatch):
     import tune_spread
     monkeypatch.setattr(tune_spread, "compute_stats_before", lambda date, df: STATS)
@@ -250,6 +278,12 @@ def test_stats_are_leak_free_and_ordered(df):
     assert stats["form_weight"].between(0, 4).all()
     order = stats["weighted_avg_time"].sort_values().index.tolist()
     assert order == ["Ann A", "Ben B", "Cal C", "Dan D"]
+
+
+def test_days_since_last(df):
+    stats = features.compute_stats_before(pd.Timestamp("2024-07-01"), df)
+    # last final before the cutoff is 2024-01-01 + 180 days = 2024-06-29
+    assert (stats["days_since_last"] == 2).all()
 
 
 def test_elo_ranks_consistent_winner_highest(df):

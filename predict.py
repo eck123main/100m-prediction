@@ -40,6 +40,33 @@ FORM_PRIOR = None
 # tune_spread.py picks another value on pre-2022 finals and 2022+ confirms.
 SD_SCALE = 1.0
 
+# Uncertainty about each athlete's *form* (not just their race-day scatter),
+# added to the spread in simulate_race. None = off (the behaviour up to
+# 2026-11). Glicko-style: a form estimate from few races is uncertain, and it
+# goes stale during a layoff. Values to try are in tune_uncertainty.py.
+# Example: {"per_race": 1.0, "drift_per_year": 0.05}
+FORM_UNCERTAINTY = None
+
+
+def form_uncertainty_sd(sd, form_weight, days_since_last, uncertainty):
+    """Predictive spread once form uncertainty is added (cf. Glicko's rating
+    deviation, which shrinks with games played and grows with inactivity):
+
+        sd_eff^2 = sd^2 * (1 + per_race / W) + drift_per_year^2 * days / 365
+
+    sd^2 / W is the variance of a mean of W races with scatter sd (W =
+    form_weight, the recency-weighted race count, floored at 0.1); the
+    drift term is a random walk in true form since the last race. Missing
+    W or days count as 0 extra. uncertainty None returns sd unchanged."""
+    sd = np.asarray(sd, dtype=float)
+    if not uncertainty:
+        return sd
+    w = np.nan_to_num(np.asarray(form_weight, dtype=float), nan=np.inf)
+    days = np.nan_to_num(np.asarray(days_since_last, dtype=float), nan=0.0)
+    var = sd ** 2 * (1 + float(uncertainty.get("per_race", 0.0)) / np.maximum(w, 0.1))
+    var = var + float(uncertainty.get("drift_per_year", 0.0)) ** 2 * np.maximum(days, 0.0) / 365
+    return np.sqrt(var)
+
 
 def _norm_cdf(z):
     """Standard normal CDF without scipy (Abramowitz & Stegun 7.1.26 erf,
@@ -82,7 +109,7 @@ def exact_win_probs(mu, sd, fr, n_grid=4000, n_local=400):
 
 
 def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1, prior=None,
-                  method="mc", sd_scale=None):
+                  method="mc", sd_scale=None, form_uncertainty="default"):
     """Monte Carlo simulate the race: model each athlete as a normal distribution
     (mean = weighted_avg_time, spread = consistency), simulate many times, and
     return win probabilities. min_races filters out athletes with too little
@@ -116,7 +143,13 @@ def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1, 
     It's the calibration knob of a normal (Thurstone/Henery) race model: >1
     flattens the win probabilities, <1 sharpens them. consistency is fitted
     to each athlete's past scatter, which can be the wrong spread for "how
-    likely is an upset in this final" — tune_spread.py fits it on finals."""
+    likely is an upset in this final" — tune_spread.py fits it on finals.
+
+    form_uncertainty ("default" = FORM_UNCERTAINTY, None = off) widens each
+    known athlete's spread by how uncertain their form estimate is: few
+    recent races or a long layoff -> wider (see form_uncertainty_sd). Unlike
+    sd_scale it's per athlete, so it can flatten a sparse athlete's chances
+    without flattening an established favourite's."""
     names = list(dict.fromkeys(athlete_names))
     field = stats_table.loc[stats_table.index.intersection(names)].copy()
     field = field.dropna(subset=["weighted_avg_time"])
@@ -136,6 +169,16 @@ def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1, 
     sd = field["consistency"].fillna(fallback_std).to_numpy(dtype=float)
     fr = field["finish_rate"].fillna(fallback_finish_rate).to_numpy(dtype=float)
     index = field.index
+
+    uncertainty = FORM_UNCERTAINTY if isinstance(form_uncertainty, str) and form_uncertainty == "default" \
+        else form_uncertainty
+    if uncertainty:
+        nan_col = np.full(len(field), np.nan)
+        sd = form_uncertainty_sd(
+            sd,
+            field["form_weight"].to_numpy(dtype=float) if "form_weight" in field else nan_col,
+            field["days_since_last"].to_numpy(dtype=float) if "days_since_last" in field else nan_col,
+            uncertainty)
 
     if prior is not None:
         prior_mu = (np.median(mu) if len(mu) else 0.0) + prior.get("offset", 0.15)
