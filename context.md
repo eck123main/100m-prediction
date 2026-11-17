@@ -27,6 +27,8 @@ See `OVERNIGHT_REPORT.md`. New, **not yet run** (Python was blocked that
 session): `tests/` (run `py -3.14 -m pytest tests`), `evaluation.py`,
 `tune_prior.py` (decides `predict.FORM_PRIOR`, a prior that stops cold-start
 athletes getting 0%), `simulate_race(method="exact")`. Defaults unchanged.
+Round 2 (also not run): `tune_spread.py` (decides `predict.SD_SCALE`, run
+after the prior), Elo for no-history athletes when a prior is on.
 
 ## Status at end of 2026-10-08 session
 
