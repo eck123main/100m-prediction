@@ -41,6 +41,15 @@ Run in this order, setting each knob before the next tuner:
 pre-2022 and the 2022+ bootstrap CI isn't worse. `tune_indoor.py` is still
 outstanding too.
 
+Round 5 (36 test cases now): **Elo bug fix (changes default output
+slightly)**. Same-date rounds (e.g. a championship's semis and final) were
+replayed and looked up in arbitrary order; now heats → QF → semi → final.
+New knob `backtest.SAME_DAY_EARLIER_ROUNDS` (default False): lets a final's
+backtest stats see that day's heats/semis, which live predictions already
+see. `backtest.py` prints a paired log-loss comparison of on vs off at the
+end. Turn it on if it doesn't hurt (it makes the backtest honest about live
+use, so leaning on).
+
 ## Status at end of 2026-10-08 session
 
 **2026-10-07 session (5-task plan, partly done):**

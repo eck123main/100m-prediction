@@ -63,7 +63,7 @@ ELO_K = 24
 # so everything stays at 1.0. See context.md.
 ELO_ROUND_K = {"final": 1.0, "semi-final": 1.0, "heats": 1.0}
 # Order of rounds held on the same date (unknown rounds sort in the middle).
-ROUND_ORDER = {"heats": 0, "semi-final": 1, "final": 2}
+ROUND_ORDER = {"heats": 0, "quarter-final": 1, "semi-final": 2, "final": 3}
 
 
 def load_clean_data(csv_path="100m_races_dataset.csv"):
@@ -151,7 +151,7 @@ def compute_elo_history(df, round_k=None):
     # date alone (unstable quicksort) left their replay order arbitrary; break
     # ties by round so an athlete's final always updates after their semi.
     races = get_real_races(df).dropna(subset=["time", "date"])
-    races = races.assign(_round_order=races["round"].map(ROUND_ORDER).fillna(1))
+    races = races.assign(_round_order=races["round"].map(ROUND_ORDER).fillna(1.5))
     races = races.sort_values(["date", "_round_order"], kind="stable")
 
     ratings = {}
