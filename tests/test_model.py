@@ -323,6 +323,35 @@ def test_elo_same_day_rounds_replayed_semi_then_final():
         assert now["X"] == pytest.approx(x[1])
 
 
+def test_same_day_earlier_rounds(df):
+    """A semi on the final's own date is invisible by default and visible with
+    before_round="final"; the final itself never is."""
+    day = pd.Timestamp("2024-01-01") + pd.Timedelta(days=60 * 9)  # last final
+    base = df.copy()
+    base.attrs = {}  # concat compares attrs, which hold a DataFrame (see features)
+    semi = base[base["date"] == day].assign(round="semi-final", heat=2, time=9.5, adj_time=9.5)
+    both = pd.concat([base, semi], ignore_index=True)
+    both.attrs = dict(df.attrs)
+    off = features.compute_stats_before(day, both)
+    on = features.compute_stats_before(day, both, before_round="final")
+    assert (off["races_used"] == 9).all()
+    assert (on["races_used"] == 10).all()  # + the semi, not the final
+    assert (on["days_since_last"] == 0).all()
+    assert (on["weighted_avg_time"] < off["weighted_avg_time"]).all()
+    assert (on["starts"] == 10).all()
+    # a heats race doesn't see the same-day semi or final
+    heats = features.compute_stats_before(day, both, before_round="heats")
+    assert (heats["races_used"] == 9).all()
+    # unknown target round = off
+    assert (features.compute_stats_before(day, both, before_round="x")["races_used"] == 9).all()
+
+    import backtest
+    final = both[(both["date"] == day) & (both["round"] == "final")]
+    np.random.seed(0)
+    assert backtest.evaluate_race(final, both, same_day=False)["winner_had_history"]
+    assert backtest.evaluate_race(final, both, same_day=True)["winner_had_history"]
+
+
 def test_prior_end_to_end(df):
     stats = features.compute_all_time_stats(df)
     np.random.seed(0)

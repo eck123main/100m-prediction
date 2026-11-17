@@ -9,7 +9,7 @@ predict itself.
 import numpy as np
 import pandas as pd
 
-from evaluation import EPS, expected_calibration_error, calibration_table, multiclass_brier
+from evaluation import EPS, expected_calibration_error, calibration_table, multiclass_brier, paired_bootstrap_ci
 from features import RACE_KEYS, compute_stats_before, get_real_races
 from predict import (FORM_PRIOR, predict_race, prior_unknown_elo, simulate_race, elo_win_probs,
                      blend_win_probs)
@@ -17,6 +17,10 @@ from predict import (FORM_PRIOR, predict_race, prior_unknown_elo, simulate_race,
 ELO_WEIGHTS_TO_COMPARE = [round(w, 1) for w in np.arange(0.0, 1.01, 0.1)]
 DEFAULT_ELO_WEIGHT = 0.1  # predict_race_full's default; gets the Brier/calibration columns
 TUNE_SPLIT_DATE = "2022-01-01"  # tune elo_weight on finals before this, test on finals after
+# Let a final's stats see that meeting's same-day heats/semis (they're run
+# before it). Live predictions already include them, so True makes the
+# backtest match live use; default off until compared (see context.md).
+SAME_DAY_EARLIER_ROUNDS = False
 
 
 def get_real_finals(df):
@@ -24,11 +28,12 @@ def get_real_finals(df):
     return get_real_races(df[df["round"] == "final"])
 
 
-def evaluate_race(race_df, df, min_races=1, prior="default", entrants=None):
+def evaluate_race(race_df, df, min_races=1, prior="default", entrants=None, same_day=None):
     """Backtest a single race. Returns None if there's no valid winner to score against.
     prior: simulate_race prior ("default" = predict.FORM_PRIOR). If entrants is
     a list, one (prob, won) pair per athlete in the field is appended to it
-    (default-blend probabilities) for per-entrant calibration."""
+    (default-blend probabilities) for per-entrant calibration. same_day:
+    use same-day earlier rounds (None = SAME_DAY_EARLIER_ROUNDS)."""
     finishers = race_df.dropna(subset=["time"])
     if len(finishers) == 0:
         return None
@@ -37,7 +42,8 @@ def evaluate_race(race_df, df, min_races=1, prior="default", entrants=None):
     field = race_df["ATHLETE"].tolist()
     actual_winner = finishers.loc[finishers["time"].idxmin(), "ATHLETE"]
 
-    stats = compute_stats_before(date, df)
+    same_day = SAME_DAY_EARLIER_ROUNDS if same_day is None else same_day
+    stats = compute_stats_before(date, df, before_round=race_df["round"].iloc[0] if same_day else None)
 
     baseline = predict_race(field, stats)
     baseline_winner = baseline.index[0] if len(baseline) > 0 else None
@@ -89,14 +95,15 @@ def evaluate_race(race_df, df, min_races=1, prior="default", entrants=None):
     return result
 
 
-def run_backtest(df, min_races=1, prior="default", return_entrants=False):
+def run_backtest(df, min_races=1, prior="default", return_entrants=False, same_day=None):
     """Evaluate every real final in df. Returns one row per race, plus (if
     return_entrants) a frame of every entrant's (date, prob, won)."""
     real_finals = get_real_finals(df)
     results, entrant_rows = [], []
     for _, race_df in real_finals.groupby(RACE_KEYS):
         pairs = []
-        result = evaluate_race(race_df, df, min_races=min_races, prior=prior, entrants=pairs)
+        result = evaluate_race(race_df, df, min_races=min_races, prior=prior, entrants=pairs,
+                               same_day=same_day)
         if result is not None:
             results.append(result)
             entrant_rows.extend((result["date"], p, won) for p, won in pairs)
@@ -225,3 +232,21 @@ if __name__ == "__main__":
         col = f"blend{int(w*100)}_correct"
         n_fixed = confident_wrong[col].sum()
         print(f"  elo_weight={w}: fixed {n_fixed} / {len(confident_wrong)} confidently-wrong MC misses")
+    print()
+
+    other = not SAME_DAY_EARLIER_ROUNDS
+    print(f"=== Same-day earlier rounds (heats/semis before a final): {SAME_DAY_EARLIER_ROUNDS} vs {other} ===")
+    np.random.seed(0)
+    alt = run_backtest(df, same_day=other)
+    keys = ["source_url", "heat", "date"]
+    k = f"blend{int(DEFAULT_ELO_WEIGHT*100)}_logloss"
+    both = results[keys + [k]].merge(alt[keys + [k]], on=keys, suffixes=("_cur", "_alt"))
+    changed = both[(both[f"{k}_cur"] - both[f"{k}_alt"]).abs() > 1e-12]
+    mean, lo, hi = paired_bootstrap_ci(both[f"{k}_alt"], both[f"{k}_cur"])
+    # Same seed for both runs, but once a field's scored size changes the MC
+    # streams drift apart, so "changed" can include pure simulation noise.
+    print(f"races: {len(both)}, changed (incl. MC noise): {len(changed)}")
+    print(f"log-loss (alt - current): {mean:+.4f}  95% CI [{lo:+.4f}, {hi:+.4f}]  (negative = alt better)")
+    if len(changed):
+        cm, clo, chi = paired_bootstrap_ci(changed[f"{k}_alt"], changed[f"{k}_cur"])
+        print(f"  on changed races only: {cm:+.4f}  95% CI [{clo:+.4f}, {chi:+.4f}]")

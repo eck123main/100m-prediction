@@ -256,12 +256,31 @@ def estimate_round_offsets(df, baseline_round="final", min_races=3):
     return (round_effect - baseline).to_dict()
 
 
-def compute_reliability_before(cutoff_date, df, prior_strength=8):
+def known_before(df, cutoff_date, before_round=None):
+    """Boolean mask of rows known before a race on cutoff_date.
+
+    Default: rows strictly before that date. With before_round (the target
+    race's round, e.g. "final"), also rows from cutoff_date itself whose round
+    comes earlier in ROUND_ORDER — a championship's semis are run hours before
+    the final on the same date, and dates here have no time of day. Rows with
+    an unknown round on that date are left out (we can't tell if they came
+    first). Live predictions (compute_all_time_stats) already see those semis,
+    so this lets the backtest match live use."""
+    mask = df["date"] < cutoff_date
+    rank = ROUND_ORDER.get(before_round) if before_round is not None else None
+    if rank is not None:
+        same_day_earlier = (df["date"] == cutoff_date) & (df["round"].map(ROUND_ORDER).fillna(rank) < rank)
+        mask = mask | same_day_earlier
+    return mask
+
+
+def compute_reliability_before(cutoff_date, df, prior_strength=8, before_round=None):
     """Per-athlete rate of producing a valid time (i.e. not a DNF/DQ/DNS), using
-    only races strictly before cutoff_date. Shrunk toward the field-wide average
+    only races strictly before cutoff_date (see known_before for before_round).
+    Shrunk toward the field-wide average
     via a Beta prior (worth prior_strength races) so an athlete with only 1-2
     starts doesn't get scored as a false 0% or 100% reliable."""
-    history = df[df["date"] < cutoff_date]
+    history = df[known_before(df, cutoff_date, before_round)]
     # Slicing propagates df.attrs (which holds elo_history, a DataFrame) onto
     # history and everything derived from it. pandas' own join/concat later
     # compares .attrs for equality to decide what to keep, and comparing two
@@ -330,12 +349,14 @@ def load_indoor_60m(df, csv_path=INDOOR_60M_CSV):
     return indoor.assign(adj_time=indoor["time"] * ratio)[["ATHLETE", "date", "adj_time"]], ratio
 
 
-def compute_stats_before(cutoff_date, df, half_life_days=HALF_LIFE_DAYS, indoor_weight=None):
+def compute_stats_before(cutoff_date, df, half_life_days=HALF_LIFE_DAYS, indoor_weight=None, before_round=None):
     """Recency-weighted stats using only races strictly before cutoff_date.
     Prevents leaking a target race's own result into an athlete's 'known form'.
+    before_round (default None = off) also admits same-day earlier rounds; see
+    known_before. Elo still uses races strictly before cutoff_date.
     Vectorized (one groupby, no per-athlete Python) — it runs once per race
     in the backtest."""
-    history = df[df["date"] < cutoff_date]
+    history = df[known_before(df, cutoff_date, before_round)]
     history.attrs = {}  # see compute_reliability_before for why
     if len(history) == 0:
         return pd.DataFrame(columns=["weighted_avg_time", "races_used", "form_weight", "consistency",
@@ -365,7 +386,7 @@ def compute_stats_before(cutoff_date, df, half_life_days=HALF_LIFE_DAYS, indoor_
     stats["races_used"] = stats["races_used"].fillna(0.0)
     stats["form_weight"] = stats["form_weight"].fillna(0.0)
 
-    reliability = compute_reliability_before(cutoff_date, df)
+    reliability = compute_reliability_before(cutoff_date, df, before_round=before_round)
     stats = stats.join(reliability[["finish_rate", "starts", "finishes"]])
 
     elo = compute_elo_before(cutoff_date, df.attrs["elo_history"])
