@@ -21,7 +21,14 @@ Paste this into a new conversation to resume work on this project.
   rescrape can be reverted on its own.
 - Update this file at the end of each session, and commit it.
 
-## START HERE — status at end of 2026-10-08 session
+## START HERE — 2026-11-18 overnight round 1
+
+See `OVERNIGHT_REPORT.md`. New, **not yet run** (Python was blocked that
+session): `tests/` (run `py -3.14 -m pytest tests`), `evaluation.py`,
+`tune_prior.py` (decides `predict.FORM_PRIOR`, a prior that stops cold-start
+athletes getting 0%), `simulate_race(method="exact")`. Defaults unchanged.
+
+## Status at end of 2026-10-08 session
 
 **2026-10-07 session (5-task plan, partly done):**
 - Done: website Track record tab has an "Elite meets / All finals" toggle
