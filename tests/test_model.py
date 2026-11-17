@@ -148,6 +148,27 @@ def test_exact_two_athletes_matches_closed_form(sd_a, sd_b):
     assert p.sum() == pytest.approx(1.0, abs=1e-4)
 
 
+def test_sd_scale_flattens_and_default_unchanged():
+    field = ["Fast", "Mid", "Slow"]
+    base = simulate_race(field, STATS, method="exact")
+    same = simulate_race(field, STATS, method="exact", sd_scale=1.0)
+    wide = simulate_race(field, STATS, method="exact", sd_scale=2.0)
+    tight = simulate_race(field, STATS, method="exact", sd_scale=0.5)
+    assert same["Fast"] == pytest.approx(base["Fast"])
+    assert tight["Fast"] > base["Fast"] > wide["Fast"]
+    assert tight["Slow"] < base["Slow"] < wide["Slow"]
+
+
+def test_score_scales_row(monkeypatch):
+    import tune_spread
+    monkeypatch.setattr(tune_spread, "compute_stats_before", lambda date, df: STATS)
+    race = pd.DataFrame({"ATHLETE": ["Fast", "Mid", "Slow"], "time": [9.9, 10.0, None],
+                         "date": pd.Timestamp("2024-01-01")})
+    row = tune_spread.score_scales(race, None, scales=[0.8, 1.0], prior=None)
+    assert set(row) == {"date", "ll_0.8", "brier_0.8", "ll_1.0", "brier_1.0"}
+    assert row["ll_0.8"] < row["ll_1.0"]  # the favourite won, so sharper scores better
+
+
 def test_exact_empty_field():
     from predict import exact_win_probs
     assert len(exact_win_probs([], [], [])) == 0

@@ -35,6 +35,11 @@ def predict_race(athlete_names, stats_table):
 # Example: {"offset": 0.15, "sd": 0.15, "races": 1.0}
 FORM_PRIOR = None
 
+# Multiplier on every athlete's race-day spread in simulate_race. 1.0 = the
+# fitted consistency as-is (the behaviour up to 2026-11). Change only if
+# tune_spread.py picks another value on pre-2022 finals and 2022+ confirms.
+SD_SCALE = 1.0
+
 
 def _norm_cdf(z):
     """Standard normal CDF without scipy (Abramowitz & Stegun 7.1.26 erf,
@@ -77,7 +82,7 @@ def exact_win_probs(mu, sd, fr, n_grid=4000, n_local=400):
 
 
 def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1, prior=None,
-                  method="mc"):
+                  method="mc", sd_scale=None):
     """Monte Carlo simulate the race: model each athlete as a normal distribution
     (mean = weighted_avg_time, spread = consistency), simulate many times, and
     return win probabilities. min_races filters out athletes with too little
@@ -105,7 +110,13 @@ def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1, 
     costs the maximum log-loss.
 
     method="exact" integrates the same model numerically (exact_win_probs)
-    instead of sampling; n_simulations is then ignored."""
+    instead of sampling; n_simulations is then ignored.
+
+    sd_scale multiplies every athlete's race-day spread (None = SD_SCALE).
+    It's the calibration knob of a normal (Thurstone/Henery) race model: >1
+    flattens the win probabilities, <1 sharpens them. consistency is fitted
+    to each athlete's past scatter, which can be the wrong spread for "how
+    likely is an upset in this final" — tune_spread.py fits it on finals."""
     names = list(dict.fromkeys(athlete_names))
     field = stats_table.loc[stats_table.index.intersection(names)].copy()
     field = field.dropna(subset=["weighted_avg_time"])
@@ -138,6 +149,8 @@ def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1, 
             sd = np.concatenate([sd, np.full(len(missing), prior.get("sd", 0.15))])
             fr = np.concatenate([fr, np.full(len(missing), fallback_finish_rate)])
             index = index.append(pd.Index(missing))
+
+    sd = sd * (SD_SCALE if sd_scale is None else sd_scale)
 
     if method == "exact":
         return pd.Series(exact_win_probs(mu, sd, fr), index=index).sort_values(ascending=False)
