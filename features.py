@@ -62,6 +62,8 @@ ELO_K = 24
 # same blended accuracy (47.1%) and log-loss within 0.002 at elo_weight=0.1,
 # so everything stays at 1.0. See context.md.
 ELO_ROUND_K = {"final": 1.0, "semi-final": 1.0, "heats": 1.0}
+# Order of rounds held on the same date (unknown rounds sort in the middle).
+ROUND_ORDER = {"heats": 0, "semi-final": 1, "final": 2}
 
 
 def load_clean_data(csv_path="100m_races_dataset.csv"):
@@ -144,7 +146,13 @@ def compute_elo_history(df, round_k=None):
     round_k overrides ELO_ROUND_K (per-round multiplier on ELO_K); a round
     with multiplier 0 is skipped entirely."""
     round_k = ELO_ROUND_K if round_k is None else round_k
-    races = get_real_races(df).dropna(subset=["time", "date"]).sort_values("date")
+    # Dates carry no time of day, so a meeting's heats, semis and final often
+    # share one date (e.g. Paris 2024 semis and final, 04/08/2024). Sorting on
+    # date alone (unstable quicksort) left their replay order arbitrary; break
+    # ties by round so an athlete's final always updates after their semi.
+    races = get_real_races(df).dropna(subset=["time", "date"])
+    races = races.assign(_round_order=races["round"].map(ROUND_ORDER).fillna(1))
+    races = races.sort_values(["date", "_round_order"], kind="stable")
 
     ratings = {}
     rows = []
@@ -186,7 +194,9 @@ def compute_elo_before(cutoff_date, elo_history):
     history = elo_history[elo_history["date"] < cutoff_date]
     if len(history) == 0:
         return pd.Series(dtype=float, name="elo")
-    return history.sort_values("date").groupby("ATHLETE")["elo"].last()
+    # Rows are already in replay order; a stable sort keeps same-date rows
+    # (semi then final) in that order so .last() is the latest rating.
+    return history.sort_values("date", kind="stable").groupby("ATHLETE")["elo"].last()
 
 
 def estimate_wind_coefficient(df, min_races=3, min_wind_std=0.3):

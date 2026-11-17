@@ -305,6 +305,24 @@ def test_elo_ranks_consistent_winner_highest(df):
     assert stats["elo"].idxmin() == "Dan D"
 
 
+def test_elo_same_day_rounds_replayed_semi_then_final():
+    """Semi and final on one date: the final must update after the semi, and
+    the lookup must return the post-final rating, whatever the row order."""
+    day = pd.Timestamp("2024-08-04")
+    rows = []
+    for rnd, order in [("final", ["X", "A", "B", "C"]), ("semi-final", ["A", "B", "C", "X"])]:
+        for i, name in enumerate(order):
+            rows.append({"ATHLETE": name, "time": 9.8 + 0.05 * i, "date": day,
+                         "round": rnd, "source_url": "hub", "heat": 1})
+    races = pd.DataFrame(rows)  # final rows listed first on purpose
+    for frame in (races, races.iloc[::-1]):
+        hist = features.compute_elo_history(frame)
+        x = hist[hist["ATHLETE"] == "X"]["elo"].tolist()
+        assert len(x) == 2 and x[0] < features.BASE_ELO < x[1]  # lost semi, then won final
+        now = features.compute_elo_before(day + pd.Timedelta(days=1), hist)
+        assert now["X"] == pytest.approx(x[1])
+
+
 def test_prior_end_to_end(df):
     stats = features.compute_all_time_stats(df)
     np.random.seed(0)
