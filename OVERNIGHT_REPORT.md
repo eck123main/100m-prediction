@@ -431,3 +431,77 @@ found one.
    a round-aware cutoff.
 6. Still open: the stats cache for tuners, the season-phase offset, a
    meeting-level prior offset, and `tune_indoor.py`.
+
+## Round 6 — 2026-11-18 (labelled "round 5" by the session prompt)
+
+### Still nothing was run
+
+Python was blocked a sixth time: `py -3.14 -m pytest tests` was auto-denied.
+Everything below was checked by reading and by hand calculation only.
+**Default output is unchanged** (both new knobs are off).
+
+### What I changed, and why
+
+1. **Round offsets fitted as two-way fixed effects** (commit da6d368,
+   `features.ROUND_OFFSETS_TWO_WAY`, default False).
+   - The problem: `estimate_round_offsets` demeans each athlete's times and
+     then averages by round. That is not a fixed-effects fit when athletes'
+     round mixes differ. A finalist's mean is mostly finals, and a weaker
+     athlete's mostly heats, so each athlete's own mean absorbs part of the
+     round gap and the offset shrinks toward 0. The docstring claimed it
+     wasn't confounded, but it was.
+   - The fix: `_two_way_round_effects` fits athlete + round jointly by
+     alternating projections (backfitting). This is the standard iterative
+     estimator for models with two sets of fixed effects
+     ([Guimarães & Portugal 2010, Stata Journal](https://repec.iza.org/dp3935.pdf)).
+     It converges to the exact OLS solution.
+   - Test: `test_round_offsets_two_way_removes_mix_bias`. Athlete A runs 9
+     heats + 1 final, B runs 1 heat + 9 finals, and heats are exactly 0.20 s
+     slower. The old method gives 0.072 (hand-computed), the new one 0.20.
+     With balanced round mixes, both give 0.20.
+   - Why it matters: heats (with easing-off) are a big share of rows, so an
+     under-corrected heats offset makes heat-heavy athletes look slower than
+     they are in every form estimate.
+2. **Quadratic (asymmetric) wind correction** (commit e4ea8e0,
+   `features.WIND_QUADRATIC`, default False; round 5's idea 4).
+   - `estimate_wind_quadratic` fits time = athlete + b·w + c·w² within
+     athlete (a 2×2 normal-equations solve on demeaned w and w²).
+   - Why w² and not w·|w|: expanding Mureika's correction
+     t₀ = t_w[1.028 − 0.028(1 − w·t_w/100)²] at t≈10 s gives
+     t_w ≈ t₀ − 0.056w + 0.0028w². That is about −0.10 s at +2 m/s and
+     +0.12 s at −2 m/s
+     ([Mureika, arXiv physics/0006057](https://arxiv.org/pdf/physics/0006057)).
+   - Tests: `test_wind_quadratic_recovers_asymmetric_wind` checks exact
+     recovery of b = −0.056 and c = 0.0028. A second test checks that the
+     knob is off by default and that c ≈ 0 on the linear synthetic data.
+3. **`tune_adjustments.py`** (commit bbd93a5). Both knobs change `adj_time`
+   at load time, so the per-race tuners can't compare them. This script
+   loads the data for all four combinations and prints the fitted wind
+   terms and round offsets. It scores every final by exact-integration
+   log-loss, split pre-2022 / 2022+, and gives the paired-bootstrap CI
+   against the current setting.
+
+I also re-read `predict.py` (`simulate_race`, the exact integrator, the
+blend and the prior) and round 5's `known_before` changes, and found no bugs.
+
+### Research
+
+- Two-way fixed effects by alternating projections:
+  [Guimarães & Portugal (2010)](https://novaresearch.unl.pt/en/publications/a-simple-feasible-procedure-to-fit-models-with-high-dimensional-f/),
+  [working-paper PDF](https://www.bportugal.pt/sites/default/files/anexos/papers/wp200909.pdf).
+- Wind physics: Mureika's correction formula (linked above), expanded to
+  the w² form used here.
+
+### Ideas for next time
+
+1. **Let `py` run** (see round 4). Six rounds of code are still unrun.
+2. Run order: tests (40 cases), then **`tune_adjustments.py` first** (it
+   changes `adj_time`, which everything else builds on), then
+   `tune_prior` → `tune_spread` → `tune_uncertainty` → `backtest.py`.
+3. Fit wind, round and athlete in one backfitting loop (wind is currently
+   fitted on raw times, ignoring round). Do this only if round offsets turn
+   out to matter.
+4. Season-phase offset: add week of season as another fixed-effect factor
+   in the same `_two_way_round_effects` loop. It is now nearly free to add.
+5. Still open: Elo same-day updates, the stats cache for tuners, a
+   meeting-level prior offset, and `tune_indoor.py`.

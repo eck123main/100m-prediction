@@ -50,6 +50,18 @@ see. `backtest.py` prints a paired log-loss comparison of on vs off at the
 end. Turn it on if it doesn't hurt (it makes the backtest honest about live
 use, so leaning on).
 
+Round 6 (40 test cases now): two more default-off knobs in `features.py`,
+both compared by the new `tune_adjustments.py`, which loads the data once
+per combination:
+- `ROUND_OFFSETS_TWO_WAY`: the current round offsets are biased toward 0
+  when athletes' round mixes differ. The test case gives 0.072 where the
+  true value is 0.20. This knob fits athlete + round jointly instead.
+- `WIND_QUADRATIC`: wind correction b·w + c·w² (a headwind costs more than
+  a tailwind gains). Check that the fitted c is > 0.
+
+Run `tune_adjustments.py` before the predict.py tuners, since it changes
+`adj_time`, which every other knob sits on.
+
 ## Status at end of 2026-10-08 session
 
 **2026-10-07 session (5-task plan, partly done):**
