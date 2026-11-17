@@ -285,3 +285,63 @@ I didn't change the permission settings myself.
 - Re-tune `elo_weight` once prior, spread and uncertainty are fixed.
 - Still open: a meeting-level prior offset, a season-phase term, and
   `tune_indoor.py`.
+
+## Round 4 — 2026-11-18 (labelled "round 3" by the session prompt)
+
+### Decision: no new model code this round
+
+Python was blocked a fourth time: `py -3.14 -m pytest tests` was auto-denied.
+Three rounds of untested code are waiting, along with three default-off knobs
+and three tuners. The knobs interact, and none has been fitted. Adding a
+fourth untested knob would add risk and give you more to run, without making
+the model any better until someone runs it. So I chose not to add more model
+code, and spent the round on review and cleanup. **Nothing in the model
+changed.**
+
+### What I did
+
+1. **Reviewed round 3's code by reading it.** This covered
+   `form_uncertainty_sd`, its use in `simulate_race`, the new
+   `days_since_last` column in `features.compute_stats_before`, and
+   `tune_uncertainty.py`. I found no bugs. I also worked through the round-3
+   test expectations by hand:
+   - formula cases: √2·sd, the weight floor giving √11·sd, the drift-only year;
+   - the sparse underdog's win chance rises from about 4% to about 18%, still below 50%;
+   - in `test_score_uncertainty_row`, the favourite "Sparse" is widened, so the winner "Fast" gains.
+
+   All of these should pass, though I couldn't run them to confirm.
+2. **Cleaned up `context.md` → START HERE** (commit a175791). It had grown
+   into overlapping notes from each round. It now has one table (knob →
+   tuner → what it does), the order to run things in, and the rule for
+   adopting a knob.
+
+### Research
+
+- Elite sprinters have two performance peaks a season: around the first week
+  of July and the fourth week of August, the second matching major
+  championships ([arXiv 1401.7474](https://arxiv.org/pdf/1401.7474)).
+  Within-season trajectories vary a lot from one season to the next
+  ([arXiv 2405.17214v2](https://arxiv.org/abs/2405.17214v2)). Both suggest a
+  season-phase term: a championship final in August may be faster than the
+  athlete's recency-weighted May/June form. This should be fitted within
+  athletes, the same way the wind coefficient was, as an offset by week of
+  the season.
+
+### Ideas for next time (in priority order)
+
+1. **Let `py` run.** For example, add `"Bash(py -3.14:*)"` and
+   `"PowerShell(py -3.14 *)"` to `permissions.allow` in
+   `.claude/settings.json`, or run the commands in START HERE yourself. I
+   didn't change the permission settings: that's your call. Until one of
+   these happens, more overnight rounds can't improve accuracy, only add
+   untested code.
+2. When Python runs: tests, then `tune_prior` → `tune_spread` →
+   `tune_uncertainty` → `backtest`, then re-tune `elo_weight`.
+3. **Speed up tuning.** All three tuners call `compute_stats_before` once per
+   final. A shared per-final stats cache (e.g. a pickle keyed by date) would
+   make re-tuning and joint tuning of the knobs cheap.
+4. **Season-phase offset** (see the research above): a within-athlete
+   regression of adjusted time on week of season, added to `adj_time` like
+   the round offsets.
+5. Still open: a meeting-level prior offset, Glicko-style inactivity on the
+   Elo side, and `tune_indoor.py`.
