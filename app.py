@@ -62,11 +62,12 @@ def prob_chart(probs):
 
 
 def prediction_table(probs, stats):
-    table = stats.loc[probs.index, ["weighted_avg_time", "finish_rate", "races_used", "elo"]].copy()
+    # reindex: with predict.FORM_PRIOR set, athletes without history can be in probs
+    table = stats.reindex(probs.index)[["weighted_avg_time", "finish_rate", "races_used", "elo"]].copy()
     table.insert(0, "win_prob", probs)
     table.columns = ["Win prob", "Form time (s)", "Finish rate", "Races", "Elo"]
     return table.style.format({"Win prob": "{:.1%}", "Form time (s)": "{:.2f}",
-                               "Finish rate": "{:.0%}", "Races": "{:.0f}", "Elo": "{:.0f}"})
+                               "Finish rate": "{:.0%}", "Races": "{:.0f}", "Elo": "{:.0f}"}, na_rep="—")
 
 
 df = get_data()
@@ -164,7 +165,7 @@ with replay_tab:
                            "Model rank": "{:.0f}"}, na_rep="—"),
             hide_index=True, width="stretch",
         )
-    no_history = [a for a in race["ATHLETE"] if a not in probs.index]
+    no_history = [a for a in race["ATHLETE"] if a not in stats.index]
     if no_history:
         st.caption(f"No earlier results for: {', '.join(no_history)}")
 

@@ -9,12 +9,13 @@ predict itself.
 import numpy as np
 import pandas as pd
 
+from evaluation import EPS, expected_calibration_error, calibration_table, multiclass_brier
 from features import RACE_KEYS, compute_stats_before, get_real_races
-from predict import predict_race, simulate_race, elo_win_probs, blend_win_probs
+from predict import FORM_PRIOR, predict_race, simulate_race, elo_win_probs, blend_win_probs
 
 ELO_WEIGHTS_TO_COMPARE = [round(w, 1) for w in np.arange(0.0, 1.01, 0.1)]
+DEFAULT_ELO_WEIGHT = 0.1  # predict_race_full's default; gets the Brier/calibration columns
 TUNE_SPLIT_DATE = "2022-01-01"  # tune elo_weight on finals before this, test on finals after
-EPS = 1e-3  # floor on prob assigned to the winner, so log-loss stays finite
 
 
 def get_real_finals(df):
@@ -22,8 +23,11 @@ def get_real_finals(df):
     return get_real_races(df[df["round"] == "final"])
 
 
-def evaluate_race(race_df, df, min_races=1):
-    """Backtest a single race. Returns None if there's no valid winner to score against."""
+def evaluate_race(race_df, df, min_races=1, prior="default", entrants=None):
+    """Backtest a single race. Returns None if there's no valid winner to score against.
+    prior: simulate_race prior ("default" = predict.FORM_PRIOR). If entrants is
+    a list, one (prob, won) pair per athlete in the field is appended to it
+    (default-blend probabilities) for per-entrant calibration."""
     finishers = race_df.dropna(subset=["time"])
     if len(finishers) == 0:
         return None
@@ -37,7 +41,8 @@ def evaluate_race(race_df, df, min_races=1):
     baseline = predict_race(field, stats)
     baseline_winner = baseline.index[0] if len(baseline) > 0 else None
 
-    win_probs = simulate_race(field, stats, min_races=min_races)
+    prior = FORM_PRIOR if isinstance(prior, str) and prior == "default" else prior
+    win_probs = simulate_race(field, stats, min_races=min_races, prior=prior)
     mc_winner = win_probs.index[0] if len(win_probs) > 0 else None
     top_pick_prob = win_probs.iloc[0] if len(win_probs) > 0 else np.nan
     prob_assigned = win_probs.get(actual_winner, 0.0)
@@ -74,19 +79,30 @@ def evaluate_race(race_df, df, min_races=1):
         result[f"blend{int(w*100)}_correct"] = blend_winner == actual_winner
         result[f"blend{int(w*100)}_prob_assigned_to_winner"] = blended.get(actual_winner, 0.0)
         result[f"blend{int(w*100)}_logloss"] = -np.log(max(blended.get(actual_winner, 0.0), EPS))
+        if w == DEFAULT_ELO_WEIGHT:
+            result[f"blend{int(w*100)}_brier"] = multiclass_brier(blended, field, actual_winner)
+            if entrants is not None:
+                entrants.extend((float(blended.get(a, 0.0)), a == actual_winner)
+                                for a in dict.fromkeys(field))
 
     return result
 
 
-def run_backtest(df, min_races=1):
-    """Evaluate every real final in df. Returns one row per race."""
+def run_backtest(df, min_races=1, prior="default", return_entrants=False):
+    """Evaluate every real final in df. Returns one row per race, plus (if
+    return_entrants) a frame of every entrant's (date, prob, won)."""
     real_finals = get_real_finals(df)
-    results = []
+    results, entrant_rows = [], []
     for _, race_df in real_finals.groupby(RACE_KEYS):
-        result = evaluate_race(race_df, df, min_races=min_races)
+        pairs = []
+        result = evaluate_race(race_df, df, min_races=min_races, prior=prior, entrants=pairs)
         if result is not None:
             results.append(result)
-    return pd.DataFrame(results).sort_values("date").reset_index(drop=True)
+            entrant_rows.extend((result["date"], p, won) for p, won in pairs)
+    results = pd.DataFrame(results).sort_values("date").reset_index(drop=True)
+    if return_entrants:
+        return results, pd.DataFrame(entrant_rows, columns=["date", "prob", "won"])
+    return results
 
 
 def summarize(results):
@@ -104,6 +120,10 @@ def summarize(results):
     }
     for w in ELO_WEIGHTS_TO_COMPARE:
         out[f"blend{int(w*100)}_top1_accuracy"] = results[f"blend{int(w*100)}_correct"].mean()
+    k = f"blend{int(DEFAULT_ELO_WEIGHT*100)}"
+    out[f"{k}_logloss"] = results[f"{k}_logloss"].mean()
+    if f"{k}_brier" in results:
+        out[f"{k}_brier"] = results[f"{k}_brier"].mean()
     return pd.Series(out)
 
 
@@ -131,8 +151,15 @@ if __name__ == "__main__":
 
     np.random.seed(0)  # simulate_race is Monte Carlo — fix the seed so runs are reproducible
     df = load_clean_data()
-    results = run_backtest(df)
+    results, entrants = run_backtest(df, return_entrants=True)
     results.to_csv("backtest_results.csv", index=False)
+
+    print(f"=== Per-entrant calibration (every athlete in every final, elo_weight={DEFAULT_ELO_WEIGHT}) ===")
+    print(calibration_table(entrants["prob"], entrants["won"]).round(3).to_string())
+    for name, part in [("before 2022", entrants[entrants["date"] < TUNE_SPLIT_DATE]),
+                       ("2022+", entrants[entrants["date"] >= TUNE_SPLIT_DATE])]:
+        print(f"  ECE {name}: {expected_calibration_error(part['prob'], part['won']):.4f} ({len(part)} entrants)")
+    print()
 
     print("=== All races ===")
     print(summarize(results))

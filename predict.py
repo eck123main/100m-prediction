@@ -27,7 +27,16 @@ def predict_race(athlete_names, stats_table):
     return field
 
 
-def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1):
+# Empirical-Bayes prior for athletes with little or no usable history
+# (see simulate_race). None = off: unknown athletes get 0% and sparse
+# athletes' form is used as-is (the behaviour up to 2026-11). Values to try
+# are in tune_prior.py; set this only if it wins there (choose on pre-2022
+# finals, confirm on 2022+ with the paired bootstrap).
+# Example: {"offset": 0.15, "sd": 0.15, "races": 1.0}
+FORM_PRIOR = None
+
+
+def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1, prior=None):
     """Monte Carlo simulate the race: model each athlete as a normal distribution
     (mean = weighted_avg_time, spread = consistency), simulate many times, and
     return win probabilities. min_races filters out athletes with too little
@@ -37,33 +46,63 @@ def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1):
     drawn as a coin flip against their finish_rate — before their time even
     enters that run's comparison. This lets a DQ/DNF-prone athlete's history
     cost them win probability, instead of every simulated race assuming
-    everyone finishes clean."""
-    field = stats_table.loc[stats_table.index.intersection(athlete_names)].copy()
+    everyone finishes clean.
+
+    prior (dict, optional) is a field-relative empirical-Bayes prior, as in
+    hierarchical models of athletics performance (e.g. Griffin et al.;
+    arXiv 2405.17214) where athletes with few results are pulled toward a
+    population level:
+      offset — prior mean, in seconds slower than the median form of the
+               known athletes in this field (a debutant in a final is
+               usually not as fast as the athletes with a record);
+      sd     — prior spread (s) for athletes with no usable time;
+      races  — pseudo-races of prior weight; each known athlete's form is
+               shrunk as (W*form + races*prior) / (W + races), with W their
+               recency-weighted race count (form_weight). 0 = no shrinkage.
+    With a prior, athletes with no usable history are simulated from it
+    instead of being dropped with 0% — without it, every cold-start winner
+    costs the maximum log-loss."""
+    names = list(dict.fromkeys(athlete_names))
+    field = stats_table.loc[stats_table.index.intersection(names)].copy()
     field = field.dropna(subset=["weighted_avg_time"])
     field = field[field["races_used"] >= min_races]
 
     fallback_std = field["consistency"].mean() if "consistency" in field and field["consistency"].notna().any() else 0.05
     fallback_finish_rate = field["finish_rate"].mean() if "finish_rate" in field and field["finish_rate"].notna().any() else 0.95
 
-    missing = set(athlete_names) - set(field.index)
-    if missing:
-        print(f"Warning: excluded (no data or below min_races={min_races}): {missing}")
+    missing = [a for a in names if a not in field.index]
+    if missing and prior is None:
+        print(f"Warning: excluded (no data or below min_races={min_races}): {set(missing)}")
 
-    if field.empty:
+    if field.empty and (prior is None or not missing):
         return pd.Series(dtype=float)
 
     mu = field["weighted_avg_time"].to_numpy(dtype=float)
     sd = field["consistency"].fillna(fallback_std).to_numpy(dtype=float)
     fr = field["finish_rate"].fillna(fallback_finish_rate).to_numpy(dtype=float)
+    index = field.index
+
+    if prior is not None:
+        prior_mu = (np.median(mu) if len(mu) else 0.0) + prior.get("offset", 0.15)
+        k = float(prior.get("races", 0.0))
+        if k > 0 and len(mu):
+            w_col = "form_weight" if "form_weight" in field else "races_used"
+            w = field[w_col].fillna(0).to_numpy(dtype=float)
+            mu = (w * mu + k * prior_mu) / (w + k)
+        if missing:
+            mu = np.concatenate([mu, np.full(len(missing), prior_mu)])
+            sd = np.concatenate([sd, np.full(len(missing), prior.get("sd", 0.15))])
+            fr = np.concatenate([fr, np.full(len(missing), fallback_finish_rate)])
+            index = index.append(pd.Index(missing))
 
     # All runs at once: one row per simulated race, one column per athlete.
-    finished = np.random.random((n_simulations, len(field))) <= fr
-    times = np.where(finished, np.random.normal(mu, sd, (n_simulations, len(field))), np.inf)
+    finished = np.random.random((n_simulations, len(mu))) <= fr
+    times = np.where(finished, np.random.normal(mu, sd, (n_simulations, len(mu))), np.inf)
     someone_finished = finished.any(axis=1)  # everyone DNF-ing is very rare; no winner
     winners = times[someone_finished].argmin(axis=1)
-    wins = np.bincount(winners, minlength=len(field))
+    wins = np.bincount(winners, minlength=len(mu))
 
-    win_probs = pd.Series(wins, index=field.index) / n_simulations
+    win_probs = pd.Series(wins, index=index) / n_simulations
     return win_probs.sort_values(ascending=False)
 
 
@@ -96,7 +135,8 @@ def blend_win_probs(mc_probs, elo_probs, elo_weight=0.5):
     return (blended / blended.sum()).sort_values(ascending=False)
 
 
-def predict_race_full(athlete_names, stats_table, n_simulations=10000, min_races=1, elo_weight=0.1):
+def predict_race_full(athlete_names, stats_table, n_simulations=10000, min_races=1, elo_weight=0.1,
+                      prior="default"):
     """Recommended prediction: blend the time-based Monte Carlo simulation
     with head-to-head Elo. elo_weight=0.1 was chosen in backtest.py by
     log-loss on finals before 2022 over a 0-1 grid, and holds up on 2022+
@@ -105,8 +145,11 @@ def predict_race_full(athlete_names, stats_table, n_simulations=10000, min_races
     log-loss (1.471 vs 1.478) while 0.1 is clearly better on 2022+ (1.869
     vs 1.896), so 0.1 is kept.
     Elo alone is a weaker signal than the time model; a small weight helps
-    probability calibration, larger weights hurt it."""
-    mc_probs = simulate_race(athlete_names, stats_table, n_simulations=n_simulations, min_races=min_races)
+    probability calibration, larger weights hurt it.
+    prior defaults to FORM_PRIOR (see simulate_race); pass None to force it off."""
+    prior = FORM_PRIOR if isinstance(prior, str) and prior == "default" else prior
+    mc_probs = simulate_race(athlete_names, stats_table, n_simulations=n_simulations,
+                             min_races=min_races, prior=prior)
     elo_probs = elo_win_probs(athlete_names, stats_table)
     return blend_win_probs(mc_probs, elo_probs, elo_weight=elo_weight)
 
@@ -201,10 +244,14 @@ if __name__ == "__main__":
     print(f"\n100m final prediction — {len(field)} athletes requested, {len(probs)} matched")
     print(f"Data through {data_through}\n")
 
-    table = stats.loc[probs.index, ["weighted_avg_time", "finish_rate", "races_used", "elo"]].copy()
+    # reindex, not .loc: with a FORM_PRIOR, athletes with no history are in probs too
+    table = stats.reindex(probs.index)[["weighted_avg_time", "finish_rate", "races_used", "elo"]].copy()
     table.insert(0, "win_prob", probs)
 
     for rank, (name, row) in enumerate(table.iterrows(), start=1):
+        if pd.isna(row["weighted_avg_time"]):
+            print(f"  {rank}. {name:<28} {row['win_prob']:>5.1%}   (no usable history: prior only)")
+            continue
         print(f"  {rank}. {name:<28} {row['win_prob']:>5.1%}   "
               f"time~{row['weighted_avg_time']:.2f}s   finish_rate={row['finish_rate']:.0%}   "
               f"races={int(row['races_used'])}   elo={row['elo']:.0f}")
