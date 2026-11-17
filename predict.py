@@ -46,17 +46,25 @@ def _norm_cdf(z):
     return 0.5 * (1 + np.sign(z) * erf)
 
 
-def exact_win_probs(mu, sd, fr, n_grid=4000):
+def exact_win_probs(mu, sd, fr, n_grid=4000, n_local=400):
     """The quantity simulate_race estimates, by numerical integration instead
     of sampling: P(i wins) = fr_i * integral of pdf_i(t) * prod_{j != i}
     (1 - fr_j * cdf_j(t)) dt — athlete i finishes in time t and everyone else
     either doesn't finish or is slower. No Monte Carlo noise (10,000 runs
     leave ~0.5 percentage points of noise on a 30% favourite), so model
     variants can be compared on the same races without seed effects.
-    Sums to P(at least one finisher), like the simulation."""
+    Sums to P(at least one finisher), like the simulation.
+
+    The grid is one even grid over the whole field plus n_local points within
+    +-8 sd of each athlete, so an athlete with a much tighter spread than the
+    rest still gets enough points under their density."""
     mu, sd, fr = (np.asarray(a, dtype=float) for a in (mu, sd, fr))
+    if len(mu) == 0:
+        return np.empty(0)
     sd = np.maximum(sd, 1e-3)
-    t = np.linspace((mu - 8 * sd).min(), (mu + 8 * sd).max(), n_grid)
+    lo, hi = (mu - 8 * sd).min(), (mu + 8 * sd).max()
+    local = (mu[:, None] + sd[:, None] * np.linspace(-8, 8, n_local)[None, :]).ravel()
+    t = np.unique(np.concatenate([np.linspace(lo, hi, n_grid), local]))
     z = (t[None, :] - mu[:, None]) / sd[:, None]
     pdf = np.exp(-0.5 * z ** 2) / (sd[:, None] * np.sqrt(2 * np.pi))
     survive = 1 - fr[:, None] * _norm_cdf(z)  # j hasn't beaten time t

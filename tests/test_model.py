@@ -135,6 +135,24 @@ def test_exact_two_equal_athletes_and_dnf_mass():
     assert p.sum() == pytest.approx(0.75, abs=1e-4)
 
 
+@pytest.mark.parametrize("sd_a,sd_b", [(0.1, 0.1), (0.005, 0.2), (0.3, 0.02)])
+def test_exact_two_athletes_matches_closed_form(sd_a, sd_b):
+    # P(A beats B) = Phi((mu_b - mu_a) / sqrt(sd_a^2 + sd_b^2)); the uneven
+    # spreads check the per-athlete grid points.
+    from math import erf, sqrt
+    from predict import exact_win_probs
+    mu_a, mu_b = 9.95, 10.0
+    expected = 0.5 * (1 + erf((mu_b - mu_a) / sqrt(sd_a ** 2 + sd_b ** 2) / sqrt(2)))
+    p = exact_win_probs([mu_a, mu_b], [sd_a, sd_b], [1.0, 1.0])
+    assert p[0] == pytest.approx(expected, abs=1e-4)
+    assert p.sum() == pytest.approx(1.0, abs=1e-4)
+
+
+def test_exact_empty_field():
+    from predict import exact_win_probs
+    assert len(exact_win_probs([], [], [])) == 0
+
+
 def test_norm_cdf_accuracy():
     from math import erf, sqrt
     from predict import _norm_cdf
