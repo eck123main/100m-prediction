@@ -14,11 +14,11 @@ import sys
 import numpy as np
 import pandas as pd
 
+from evaluation import EPS, multiclass_brier, paired_bootstrap_ci  # same floor as backtest.py
 from features import ATHLETE_ALIASES
 from scraper import scrape_hub_race, scrape_race
 
 LOG_PATH = sys.argv[1] if len(sys.argv) > 1 else "predictions_log.csv"
-EPS = 1e-3  # same floor as backtest.py, so log-loss is comparable
 
 
 def actual_winner(race_url):
@@ -54,12 +54,14 @@ def main():
             "winner": winner, "top_pick": probs.index[0],
             "correct": probs.index[0] == winner,
             "prob_to_winner": p, "logloss": -np.log(max(p, EPS)),
+            "brier": multiclass_brier(probs, list(probs.index), winner),
         }
         if "book_prob" in pred and pred["book_prob"].notna().any():
             book = pred.set_index("athlete")["book_prob"].fillna(0).sort_values(ascending=False)
             bp = book.get(winner, 0.0)
             row.update({"book_pick": book.index[0], "book_correct": book.index[0] == winner,
-                        "book_prob_to_winner": bp, "book_logloss": -np.log(max(bp, EPS))})
+                        "book_prob_to_winner": bp, "book_logloss": -np.log(max(bp, EPS)),
+                        "book_brier": multiclass_brier(book, list(book.index), winner)})
         rows.append(row)
 
     report = pd.DataFrame(rows)
@@ -68,14 +70,18 @@ def main():
     scored = report[report["status"] == "scored"]
     if len(scored):
         print(f"\nScored {len(scored)} races: top-1 {scored['correct'].mean():.1%}, "
-              f"mean log-loss {scored['logloss'].mean():.3f}, "
+              f"mean log-loss {scored['logloss'].mean():.3f}, brier {scored['brier'].mean():.3f}, "
               f"mean prob to winner {scored['prob_to_winner'].mean():.1%}")
     if "book_logloss" in scored and scored["book_logloss"].notna().any():
         both = scored.dropna(subset=["book_logloss"])
         print(f"\nModel vs bookmaker on the {len(both)} races with odds logged "
               f"(lower log-loss is better):")
-        print(f"  model:     top-1 {both['correct'].mean():.1%}, log-loss {both['logloss'].mean():.3f}")
-        print(f"  bookmaker: top-1 {both['book_correct'].mean():.1%}, log-loss {both['book_logloss'].mean():.3f}")
+        print(f"  model:     top-1 {both['correct'].mean():.1%}, log-loss {both['logloss'].mean():.3f}, "
+              f"brier {both['brier'].mean():.3f}")
+        print(f"  bookmaker: top-1 {both['book_correct'].mean():.1%}, log-loss {both['book_logloss'].mean():.3f}, "
+              f"brier {both['book_brier'].mean():.3f}")
+        mean, lo, hi = paired_bootstrap_ci(both["logloss"], both["book_logloss"])
+        print(f"  model - bookmaker log-loss: {mean:+.3f} (95% CI {lo:+.3f} to {hi:+.3f}; negative = model better)")
     print(f"Pending: {(report['status'] == 'pending').sum()}")
 
 
