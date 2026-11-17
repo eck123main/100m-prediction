@@ -197,6 +197,19 @@ def test_score_scales_row(monkeypatch):
     assert row["ll_0.8"] < row["ll_1.0"]  # the favourite won, so sharper scores better
 
 
+def test_score_uncertainty_row(monkeypatch):
+    import tune_uncertainty
+    monkeypatch.setattr(tune_uncertainty, "compute_stats_before", lambda date, df: STATS)
+    race = pd.DataFrame({"ATHLETE": ["Fast", "Mid", "Sparse"], "time": [9.9, 10.0, 10.1],
+                         "date": pd.Timestamp("2024-01-01")})
+    configs = {"off": None, "r1.0": {"per_race": 1.0}}
+    row = tune_uncertainty.score_configs(race, None, configs=configs, prior=None)
+    assert set(row) == {"date", "ll_off", "brier_off", "ll_r1.0", "brier_r1.0"}
+    # Sparse (0.2 effective races) was the fastest on paper but lost; widening
+    # their spread moves probability to the winner.
+    assert row["ll_r1.0"] < row["ll_off"]
+
+
 def test_exact_empty_field():
     from predict import exact_win_probs
     assert len(exact_win_probs([], [], [])) == 0
