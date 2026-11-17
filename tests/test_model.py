@@ -161,6 +161,27 @@ def test_norm_cdf_accuracy():
     assert np.max(np.abs(_norm_cdf(z) - expected)) < 1e-6
 
 
+def test_elo_unknown_excluded_or_base():
+    from features import BASE_ELO
+    from predict import elo_win_probs, prior_unknown_elo
+    p = elo_win_probs(["Fast", "Nobody"], STATS)
+    assert list(p.index) == ["Fast"]
+    p = elo_win_probs(["Fast", "Nobody", "Nobody"], STATS, unknown_elo=BASE_ELO)
+    assert set(p.index) == {"Fast", "Nobody"}
+    assert p.sum() == pytest.approx(1.0)
+    assert prior_unknown_elo(None) is None
+    assert prior_unknown_elo({"offset": 0.1}) == BASE_ELO
+    assert prior_unknown_elo({"elo": 1400}) == 1400
+
+
+def test_predict_race_full_prior_gives_unknown_elo_share():
+    # With elo_weight=1 only the Elo side counts: the unknown athlete must
+    # still get a share when a prior is on.
+    p = predict_race_full(["Fast", "Nobody"], STATS, n_simulations=1000, elo_weight=1.0,
+                          prior={"offset": 0.1, "sd": 0.15})
+    assert p["Nobody"] > 0
+
+
 def test_blend_union_and_normalised():
     mc = pd.Series({"A": 0.7, "B": 0.3})
     elo = pd.Series({"A": 0.4, "B": 0.4, "C": 0.2})

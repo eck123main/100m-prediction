@@ -153,19 +153,23 @@ def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1, 
     return win_probs.sort_values(ascending=False)
 
 
-def elo_win_probs(athlete_names, stats_table):
+def elo_win_probs(athlete_names, stats_table, unknown_elo=None):
     """Win probabilities from head-to-head Elo rating alone (ignores time/
     consistency/reliability entirely) — the Bradley-Terry extension of the
-    pairwise Elo formula: p_i proportional to 10^(elo_i/400). An athlete with
-    no rating history still gets a rating (BASE_ELO, via compute_stats_before),
-    so this never excludes anyone in the field the way simulate_race can."""
-    field = stats_table.loc[stats_table.index.intersection(athlete_names)]
+    pairwise Elo formula: p_i proportional to 10^(elo_i/400). An athlete in
+    the stats table with no rating history gets BASE_ELO (via
+    compute_stats_before). Athletes not in the table at all are excluded,
+    unless unknown_elo is given: then they get that rating (predict_race_full
+    passes BASE_ELO when the form prior is on, so a debutant isn't left at 0
+    on the Elo side while the time side gives them a chance)."""
+    names = list(dict.fromkeys(athlete_names))
+    elo = stats_table["elo"].reindex(names)
+    missing = elo.index[elo.isna()]
+    if len(missing) and unknown_elo is None:
+        print(f"Warning: no usable data for {set(missing)} — excluded from prediction")
+    elo = elo.dropna() if unknown_elo is None else elo.fillna(unknown_elo)
 
-    missing = set(athlete_names) - set(field.index)
-    if missing:
-        print(f"Warning: no usable data for {missing} — excluded from prediction")
-
-    strength = 10 ** (field["elo"] / 400)
+    strength = 10 ** (elo / 400)
     return (strength / strength.sum()).sort_values(ascending=False)
 
 
@@ -197,8 +201,18 @@ def predict_race_full(athlete_names, stats_table, n_simulations=10000, min_races
     prior = FORM_PRIOR if isinstance(prior, str) and prior == "default" else prior
     mc_probs = simulate_race(athlete_names, stats_table, n_simulations=n_simulations,
                              min_races=min_races, prior=prior)
-    elo_probs = elo_win_probs(athlete_names, stats_table)
+    elo_probs = elo_win_probs(athlete_names, stats_table, unknown_elo=prior_unknown_elo(prior))
     return blend_win_probs(mc_probs, elo_probs, elo_weight=elo_weight)
+
+
+def prior_unknown_elo(prior):
+    """Elo rating for athletes with no history: BASE_ELO (where every athlete
+    starts) when a form prior is on, None (= exclude them, the old
+    behaviour) when it's off. A prior can override it with an "elo" key."""
+    if prior is None:
+        return None
+    from features import BASE_ELO
+    return prior.get("elo", BASE_ELO)
 
 
 def parse_odds(text):

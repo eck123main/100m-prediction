@@ -11,7 +11,8 @@ import pandas as pd
 
 from evaluation import EPS, expected_calibration_error, calibration_table, multiclass_brier
 from features import RACE_KEYS, compute_stats_before, get_real_races
-from predict import FORM_PRIOR, predict_race, simulate_race, elo_win_probs, blend_win_probs
+from predict import (FORM_PRIOR, predict_race, prior_unknown_elo, simulate_race, elo_win_probs,
+                     blend_win_probs)
 
 ELO_WEIGHTS_TO_COMPARE = [round(w, 1) for w in np.arange(0.0, 1.01, 0.1)]
 DEFAULT_ELO_WEIGHT = 0.1  # predict_race_full's default; gets the Brier/calibration columns
@@ -51,7 +52,7 @@ def evaluate_race(race_df, df, min_races=1, prior="default", entrants=None):
     else:
         winner_rank = np.nan
 
-    elo_probs = elo_win_probs(field, stats)
+    elo_probs = elo_win_probs(field, stats, unknown_elo=prior_unknown_elo(prior))
     elo_winner = elo_probs.index[0] if len(elo_probs) > 0 else None
 
     result = {

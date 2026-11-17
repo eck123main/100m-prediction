@@ -19,7 +19,7 @@ import pandas as pd
 from backtest import TUNE_SPLIT_DATE, get_real_finals
 from evaluation import multiclass_brier, paired_bootstrap_ci, winner_log_loss
 from features import RACE_KEYS, compute_stats_before, load_clean_data
-from predict import blend_win_probs, elo_win_probs, simulate_race
+from predict import blend_win_probs, elo_win_probs, prior_unknown_elo, simulate_race
 
 CONFIGS = {"off": None}
 for offset in [0.0, 0.1, 0.2, 0.3]:
@@ -37,12 +37,20 @@ def score_configs(race, df, configs=CONFIGS, elo_weight=0.1):
     date, field = race["date"].iloc[0], race["ATHLETE"].tolist()
     winner = finishers.loc[finishers["time"].idxmin(), "ATHLETE"]
     stats = compute_stats_before(date, df)
-    elo = elo_win_probs(field, stats)
-    row = {"date": date, "cold_start": winner not in stats.index}
+    # Cold start = the winner has no usable time (not in the table, or only
+    # DNFs/DQs on record), i.e. the case the prior is for.
+    cold = winner not in stats.index or pd.isna(stats.at[winner, "weighted_avg_time"])
+    row = {"date": date, "cold_start": cold}
+    elo_cache = {}
     for name, prior in configs.items():
+        # Same Elo handling as predict_race_full: with a prior, athletes with
+        # no history get BASE_ELO on the Elo side instead of nothing.
+        unknown_elo = prior_unknown_elo(prior)
+        if unknown_elo not in elo_cache:
+            elo_cache[unknown_elo] = elo_win_probs(field, stats, unknown_elo=unknown_elo)
         # exact integration, not Monte Carlo: no sampling noise between configs
-        p = blend_win_probs(simulate_race(field, stats, prior=prior, method="exact"), elo,
-                            elo_weight=elo_weight)
+        p = blend_win_probs(simulate_race(field, stats, prior=prior, method="exact"),
+                            elo_cache[unknown_elo], elo_weight=elo_weight)
         row[f"ll_{name}"] = winner_log_loss(p, winner)
         row[f"brier_{name}"] = multiclass_brier(p, field, winner)
         row[f"top1_{name}"] = len(p) > 0 and p.index[0] == winner
