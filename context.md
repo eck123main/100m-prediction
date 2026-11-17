@@ -21,17 +21,25 @@ Paste this into a new conversation to resume work on this project.
   rescrape can be reverted on its own.
 - Update this file at the end of each session, and commit it.
 
-## START HERE — 2026-11-18 overnight round 1
+## START HERE — 2026-11-18 overnight rounds (none of it run yet)
 
-See `OVERNIGHT_REPORT.md`. New, **not yet run** (Python was blocked that
-session): `tests/` (run `py -3.14 -m pytest tests`), `evaluation.py`,
-`tune_prior.py` (decides `predict.FORM_PRIOR`, a prior that stops cold-start
-athletes getting 0%), `simulate_race(method="exact")`. Defaults unchanged.
-Later overnight rounds (also not run) added `tune_spread.py` (`SD_SCALE`) and
-`tune_uncertainty.py` (`FORM_UNCERTAINTY`). Run them in that order: tests,
-tune_prior, tune_spread, tune_uncertainty, backtest.
-Round 2 (also not run): `tune_spread.py` (decides `predict.SD_SCALE`, run
-after the prior), Elo for no-history athletes when a prior is on.
+See `OVERNIGHT_REPORT.md`. Python was blocked in all four overnight rounds,
+so none of this has been executed. All model defaults are unchanged.
+New since 2026-10-08: `tests/` (34 cases), `evaluation.py` (Brier, ECE,
+bootstrap), `simulate_race(method="exact")`, and three default-off knobs, each
+with its own tuner:
+
+| Knob in `predict.py` | Tuner | What it does |
+|---|---|---|
+| `FORM_PRIOR` | `tune_prior.py` | cold-start athletes get a prior instead of 0% |
+| `SD_SCALE` | `tune_spread.py` | global spread (temperature) calibration |
+| `FORM_UNCERTAINTY` | `tune_uncertainty.py` | wider spread for sparse / long-layoff athletes |
+
+Run in this order, setting each knob before the next tuner:
+`py -3.14 -m pytest tests`, `tune_prior.py`, `tune_spread.py`,
+`tune_uncertainty.py`, then `backtest.py`. Adopt a knob only if it wins on
+pre-2022 and the 2022+ bootstrap CI isn't worse. `tune_indoor.py` is still
+outstanding too.
 
 ## Status at end of 2026-10-08 session
 
