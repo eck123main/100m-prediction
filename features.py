@@ -68,6 +68,10 @@ ROUND_ORDER = {"heats": 0, "quarter-final": 1, "semi-final": 2, "final": 3}
 # instead of the one-pass within-athlete average, which shrinks them toward 0
 # (see estimate_round_offsets). Default off until backtested (context.md).
 ROUND_OFFSETS_TWO_WAY = False
+# Correct wind with b*w + c*w^2 (headwind costs more than tailwind gains)
+# instead of a single slope; see estimate_wind_quadratic. Default off until
+# backtested; check that the fitted c comes out positive (physics) first.
+WIND_QUADRATIC = False
 
 
 def load_clean_data(csv_path="100m_races_dataset.csv"):
@@ -109,10 +113,14 @@ def load_clean_data(csv_path="100m_races_dataset.csv"):
         df["heat"] = 1
     df["heat"] = df["heat"].fillna(1).astype(int)
 
-    coefficient = estimate_wind_coefficient(df)
-    df["adj_time"] = df["time"] - coefficient * df["wind"]
+    if WIND_QUADRATIC:
+        coefficient, quadratic = estimate_wind_quadratic(df)
+    else:
+        coefficient, quadratic = estimate_wind_coefficient(df), 0.0
+    df["adj_time"] = df["time"] - coefficient * df["wind"] - quadratic * df["wind"] ** 2
     df["adj_time"] = df["adj_time"].fillna(df["time"])
     df.attrs["wind_coefficient"] = coefficient
+    df.attrs["wind_quadratic"] = quadratic
 
     round_offsets = estimate_round_offsets(df)
     df["adj_time"] = df["adj_time"] - df["round"].map(round_offsets).fillna(0)
@@ -249,6 +257,34 @@ def _two_way_round_effects(valid, max_iter=1000, tol=1e-9):
         if done:
             break
     return r.groupby(rnd).first()
+
+
+def estimate_wind_quadratic(df, min_races=3, min_wind_std=0.3):
+    """(b, c) in time = athlete + b*wind + c*wind^2, fitted within athlete
+    like estimate_wind_coefficient (same eligibility). Physics says c > 0:
+    drag goes with (v - w)^2, so a headwind costs more than the same
+    tailwind gains. Mureika's correction (arXiv physics/0006057) expands at
+    t ~ 10 s to roughly b = -0.056, c = +0.0028 (+2 m/s: -0.10 s; -2 m/s:
+    +0.12 s). Returns (linear-only b, 0.0) if wind^2 has no within-athlete
+    variation."""
+    valid = df.dropna(subset=["time", "wind"])
+    counts = valid.groupby("ATHLETE").size()
+    wind_std = valid.groupby("ATHLETE")["wind"].std()
+    eligible = counts[(counts >= min_races) & (wind_std.reindex(counts.index).fillna(0) >= min_wind_std)].index
+    valid = valid[valid["ATHLETE"].isin(eligible)]
+    if len(valid) == 0:
+        return 0.0, 0.0
+    g = valid.groupby("ATHLETE")
+    w, w2 = valid["wind"].astype(float), valid["wind"].astype(float) ** 2
+    dt = valid["time"] - g["time"].transform("mean")
+    dw = w - w.groupby(valid["ATHLETE"]).transform("mean")
+    dw2 = w2 - w2.groupby(valid["ATHLETE"]).transform("mean")
+    xtx = np.array([[(dw * dw).sum(), (dw * dw2).sum()], [(dw * dw2).sum(), (dw2 * dw2).sum()]])
+    xty = np.array([(dw * dt).sum(), (dw2 * dt).sum()])
+    if np.linalg.cond(xtx) > 1e12:
+        return estimate_wind_coefficient(df, min_races, min_wind_std), 0.0
+    b, c = np.linalg.solve(xtx, xty)
+    return float(b), float(c)
 
 
 def estimate_round_offsets(df, baseline_round="final", min_races=3, two_way=None):

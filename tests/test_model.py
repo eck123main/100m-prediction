@@ -305,6 +305,28 @@ def test_elo_ranks_consistent_winner_highest(df):
     assert stats["elo"].idxmin() == "Dan D"
 
 
+def test_wind_quadratic_recovers_asymmetric_wind():
+    """Noise-free times with Mureika-like b=-0.056, c=+0.0028 are recovered
+    exactly despite different athlete abilities."""
+    rng = np.random.default_rng(1)
+    rows = []
+    for name, ability in [("A", 9.9), ("B", 10.0), ("C", 10.2)]:
+        for w in rng.uniform(-2.5, 2.5, 12):
+            rows.append({"ATHLETE": name, "wind": w, "time": ability - 0.056 * w + 0.0028 * w ** 2})
+    b, c = features.estimate_wind_quadratic(pd.DataFrame(rows))
+    assert b == pytest.approx(-0.056, abs=1e-9)
+    assert c == pytest.approx(0.0028, abs=1e-9)
+    assert features.estimate_wind_quadratic(pd.DataFrame(columns=["ATHLETE", "wind", "time"])) == (0.0, 0.0)
+
+
+def test_wind_quadratic_off_by_default_and_linear_data(df, tmp_path, monkeypatch):
+    assert df.attrs["wind_quadratic"] == 0.0
+    monkeypatch.setattr(features, "WIND_QUADRATIC", True)
+    quad = features.load_clean_data(synthetic_csv(tmp_path))
+    assert quad.attrs["wind_coefficient"] == pytest.approx(-0.05, abs=0.01)
+    assert abs(quad.attrs["wind_quadratic"]) < 0.01  # synthetic data is linear in wind
+
+
 def test_round_offsets_two_way_removes_mix_bias():
     """A (10.00) runs 9 heats + 1 final, B (10.10) 1 heat + 9 finals; heats
     are exactly 0.20 s slower. The one-pass within-athlete average gives
