@@ -14,7 +14,6 @@ confirm CI isn't worse, set predict.FORM_PRIOR to it and re-run backtest.py.
     py -3.14 tune_prior.py
 """
 
-import numpy as np
 import pandas as pd
 
 from backtest import TUNE_SPLIT_DATE, get_real_finals
@@ -30,7 +29,7 @@ for offset in [0.1, 0.2]:
         CONFIGS[f"o{offset}_k{races}"] = {"offset": offset, "sd": 0.15, "races": races}
 
 
-def score_configs(race, df, configs=CONFIGS, elo_weight=0.1, seed=0):
+def score_configs(race, df, configs=CONFIGS, elo_weight=0.1):
     """One row of per-config scores for one final (None if nobody finished)."""
     finishers = race.dropna(subset=["time"])
     if finishers.empty:
@@ -41,8 +40,9 @@ def score_configs(race, df, configs=CONFIGS, elo_weight=0.1, seed=0):
     elo = elo_win_probs(field, stats)
     row = {"date": date, "cold_start": winner not in stats.index}
     for name, prior in configs.items():
-        np.random.seed(seed)
-        p = blend_win_probs(simulate_race(field, stats, prior=prior), elo, elo_weight=elo_weight)
+        # exact integration, not Monte Carlo: no sampling noise between configs
+        p = blend_win_probs(simulate_race(field, stats, prior=prior, method="exact"), elo,
+                            elo_weight=elo_weight)
         row[f"ll_{name}"] = winner_log_loss(p, winner)
         row[f"brier_{name}"] = multiclass_brier(p, field, winner)
         row[f"top1_{name}"] = len(p) > 0 and p.index[0] == winner

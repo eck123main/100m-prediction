@@ -36,7 +36,40 @@ def predict_race(athlete_names, stats_table):
 FORM_PRIOR = None
 
 
-def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1, prior=None):
+def _norm_cdf(z):
+    """Standard normal CDF without scipy (Abramowitz & Stegun 7.1.26 erf,
+    max abs error ~1.5e-7)."""
+    x = np.abs(z) / np.sqrt(2)
+    t = 1 / (1 + 0.3275911 * x)
+    poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))))
+    erf = 1 - poly * np.exp(-x * x)
+    return 0.5 * (1 + np.sign(z) * erf)
+
+
+def exact_win_probs(mu, sd, fr, n_grid=4000):
+    """The quantity simulate_race estimates, by numerical integration instead
+    of sampling: P(i wins) = fr_i * integral of pdf_i(t) * prod_{j != i}
+    (1 - fr_j * cdf_j(t)) dt — athlete i finishes in time t and everyone else
+    either doesn't finish or is slower. No Monte Carlo noise (10,000 runs
+    leave ~0.5 percentage points of noise on a 30% favourite), so model
+    variants can be compared on the same races without seed effects.
+    Sums to P(at least one finisher), like the simulation."""
+    mu, sd, fr = (np.asarray(a, dtype=float) for a in (mu, sd, fr))
+    sd = np.maximum(sd, 1e-3)
+    t = np.linspace((mu - 8 * sd).min(), (mu + 8 * sd).max(), n_grid)
+    z = (t[None, :] - mu[:, None]) / sd[:, None]
+    pdf = np.exp(-0.5 * z ** 2) / (sd[:, None] * np.sqrt(2 * np.pi))
+    survive = 1 - fr[:, None] * _norm_cdf(z)  # j hasn't beaten time t
+    out = np.empty(len(mu))
+    for i in range(len(mu)):
+        others = np.prod(np.delete(survive, i, axis=0), axis=0)
+        out[i] = fr[i] * np.trapezoid(pdf[i] * others, t) if hasattr(np, "trapezoid") \
+            else fr[i] * np.trapz(pdf[i] * others, t)
+    return out
+
+
+def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1, prior=None,
+                  method="mc"):
     """Monte Carlo simulate the race: model each athlete as a normal distribution
     (mean = weighted_avg_time, spread = consistency), simulate many times, and
     return win probabilities. min_races filters out athletes with too little
@@ -61,7 +94,10 @@ def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1, 
                recency-weighted race count (form_weight). 0 = no shrinkage.
     With a prior, athletes with no usable history are simulated from it
     instead of being dropped with 0% — without it, every cold-start winner
-    costs the maximum log-loss."""
+    costs the maximum log-loss.
+
+    method="exact" integrates the same model numerically (exact_win_probs)
+    instead of sampling; n_simulations is then ignored."""
     names = list(dict.fromkeys(athlete_names))
     field = stats_table.loc[stats_table.index.intersection(names)].copy()
     field = field.dropna(subset=["weighted_avg_time"])
@@ -94,6 +130,9 @@ def simulate_race(athlete_names, stats_table, n_simulations=10000, min_races=1, 
             sd = np.concatenate([sd, np.full(len(missing), prior.get("sd", 0.15))])
             fr = np.concatenate([fr, np.full(len(missing), fallback_finish_rate)])
             index = index.append(pd.Index(missing))
+
+    if method == "exact":
+        return pd.Series(exact_win_probs(mu, sd, fr), index=index).sort_values(ascending=False)
 
     # All runs at once: one row per simulated race, one column per athlete.
     finished = np.random.random((n_simulations, len(mu))) <= fr

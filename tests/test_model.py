@@ -113,6 +113,36 @@ def test_predict_race_full_prior_none_matches_off():
     assert a.sum() == pytest.approx(1.0)
 
 
+def test_exact_matches_monte_carlo():
+    stats = STATS.copy()
+    stats.loc["Slow", "finish_rate"] = 0.8
+    field = ["Fast", "Mid", "Slow", "Sparse"]
+    np.random.seed(0)
+    mc = simulate_race(field, stats, n_simulations=200000)
+    ex = simulate_race(field, stats, method="exact")
+    assert set(mc.index) == set(ex.index)
+    for a in field:
+        assert ex[a] == pytest.approx(mc[a], abs=0.01)
+    assert ex.sum() == pytest.approx(1.0, abs=1e-3)
+
+
+def test_exact_two_equal_athletes_and_dnf_mass():
+    from predict import exact_win_probs
+    p = exact_win_probs([10.0, 10.0], [0.1, 0.1], [1.0, 1.0])
+    assert p == pytest.approx([0.5, 0.5], abs=1e-4)
+    # Nobody finishes with probability 0.5 * 0.5 -> probabilities sum to 0.75.
+    p = exact_win_probs([10.0, 10.0], [0.1, 0.1], [0.5, 0.5])
+    assert p.sum() == pytest.approx(0.75, abs=1e-4)
+
+
+def test_norm_cdf_accuracy():
+    from math import erf, sqrt
+    from predict import _norm_cdf
+    z = np.linspace(-5, 5, 101)
+    expected = np.array([0.5 * (1 + erf(v / sqrt(2))) for v in z])
+    assert np.max(np.abs(_norm_cdf(z) - expected)) < 1e-6
+
+
 def test_blend_union_and_normalised():
     mc = pd.Series({"A": 0.7, "B": 0.3})
     elo = pd.Series({"A": 0.4, "B": 0.4, "C": 0.2})
