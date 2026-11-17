@@ -202,3 +202,86 @@ py -3.14 backtest.py
   order of each race, not just pairwise results.
 - Still open from last round: a data-driven prior offset by meeting level,
   a season-phase/layoff term (days since last race), and `tune_indoor.py`.
+
+## Round 3 — 2026-11-18 (labelled "round 2" by the session prompt)
+
+### Still nothing was run
+
+Python was blocked a third time (`py -3.14 -m pytest tests` was auto-denied:
+there was no way to approve it). Three rounds of code are now untested. I
+re-read last round's code (`predict.py`, `tune_prior.py`, `tune_spread.py`,
+`backtest.py`, the stats code in `features.py`) and found no bugs. Since every
+extra untested line adds risk, this round makes one focused, default-off
+change. **Defaults are unchanged** (`FORM_UNCERTAINTY = None`), and with them
+the output is the same as before, including the MC draws.
+
+Run in this order (also noted in `context.md`):
+
+```
+py -3.14 -m pytest tests        # now 34 cases
+py -3.14 tune_prior.py          # adopt FORM_PRIOR if it passes
+py -3.14 tune_spread.py         # adopt SD_SCALE if it passes
+py -3.14 tune_uncertainty.py    # adopt FORM_UNCERTAINTY if it passes
+py -3.14 backtest.py
+```
+
+To stop this happening again, allow `py` for overnight sessions (e.g. a
+`Bash(py -3.14:*)` / `PowerShell(py -3.14 *)` rule in `.claude/settings.json`).
+I didn't change the permission settings myself.
+
+### What I changed, and why
+
+1. **Glicko-style form uncertainty** (commit 1759347).
+   `simulate_race(form_uncertainty=...)`, default `predict.FORM_UNCERTAINTY = None`.
+   - The problem: the simulation uses an athlete's form estimate as if it
+     were exact and adds only their race-day scatter (`consistency`). An
+     athlete with one recent race, or one coming back from a long layoff,
+     gets as sharp a distribution as an established athlete who raced last
+     week. That makes the model overconfident about exactly the athletes it
+     knows least about. The prior's `races` shrinkage moves their *mean*;
+     nothing widened their *spread*.
+   - The fix: the predictive spread is now
+     `sd² · (1 + per_race / W) + drift_per_year² · days_since_last / 365`.
+     The first term is the variance of a mean of W races, where W is the
+     recency-weighted race count (`form_weight`). The second is a random walk
+     in true form since the last race. This is how Glicko's rating deviation
+     works: it shrinks as games are played and grows with inactivity. It
+     differs from `sd_scale`: it's per athlete, so it can flatten a sparse
+     athlete's chances without flattening an established favourite's. This
+     was the "per-athlete spread scale by experience" idea from last round.
+   - `features.compute_stats_before` gains a `days_since_last` column (days
+     from the athlete's last usable time to the cutoff).
+   - Tests: the formula (including missing/zero weights), off = default =
+     the old output, it helps a sparse underdog without pushing them past
+     50%, it works on stats without the new columns, and `days_since_last`
+     on the synthetic dataset.
+2. **`tune_uncertainty.py`** (commit 718fee9). Tries `per_race` 0.5/1/2,
+   `drift_per_year` 0.05/0.1 s, and their combinations, with exact
+   integration. It picks the best on pre-2022 log-loss, confirms on 2022+
+   with the paired bootstrap against off, prints the per-entrant ECE, and
+   writes `tune_uncertainty_results.csv`. It uses the current `FORM_PRIOR`
+   and `SD_SCALE`, so tune those first. Tested through `score_configs` with
+   stubbed stats.
+
+### Research
+
+- Glicko: rating deviation RD falls after each game and grows during
+  inactivity as RD = min(√(RD₀² + c²t), RD_unrated). The same two effects
+  apply here: few races and a stale form estimate.
+  [Glicko rating system (Wikipedia)](https://en.wikipedia.org/wiki/Glicko_rating_system);
+  [Glickman's papers](http://www.glicko.net/glicko.html).
+- The Bayesian predictive for a normal mean with known scatter σ after n
+  observations has variance σ²(1 + 1/n). `per_race = 1` is that textbook
+  case. Larger values allow for recency weighting and model error. Same
+  hierarchical-shrinkage reasoning as round 1
+  ([arXiv 2405.17214](https://arxiv.org/abs/2405.17214)).
+
+### Ideas for next time
+
+- Run everything above. This is still worth far more than more code.
+- If `FORM_UNCERTAINTY` with drift helps, try the same drift on the Elo side
+  (a Glicko-style rating: inactive athletes' ratings pulled toward BASE_ELO,
+  or a Glicko-2 implementation in place of Elo).
+- Re-tune `elo_weight` once prior, spread and uncertainty are fixed.
+- Still open: a meeting-level prior offset, a season-phase term, and
+  `tune_indoor.py`.
