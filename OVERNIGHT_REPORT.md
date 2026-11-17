@@ -345,3 +345,89 @@ changed.**
    the round offsets.
 5. Still open: a meeting-level prior offset, Glicko-style inactivity on the
    Elo side, and `tune_indoor.py`.
+
+## Round 5 — 2026-11-18 (labelled "round 4" by the session prompt)
+
+### Still nothing was run
+
+Python was blocked a fifth time: `py -3.14 -m pytest tests` was auto-denied,
+and so was even `wc -l`. Only file tools and single git commands worked.
+Instead of adding another tuning knob, I read the older core code
+(`features.py`, which no earlier overnight round had reviewed) for bugs, and
+found one.
+
+### What I changed, and why
+
+1. **Elo bug: same-day rounds were replayed in arbitrary order** (commits
+   efea2e3, 19efc7c). **This changes default output slightly.**
+   - Dates have no time of day (`04/08/2024 00:00:00`), and a championship's
+     semis and final share a date. For example, Paris 2024's semis and final
+     are both on 04/08/2024 in the CSV. `compute_elo_history` sorted on date
+     alone with pandas' default unstable quicksort, so a final could be
+     replayed *before* its semi. `compute_elo_before` then took `.last()`
+     after another unstable sort, so the rating it returned for a later race
+     could be the post-semi one, missing the final's update entirely. This
+     hits exactly the championship finals that matter most.
+   - The fix: a new `features.ROUND_ORDER` (heats → quarter-final →
+     semi-final → final; unknown rounds go in the middle). The replay sorts
+     on (date, round) with a stable sort, and the lookup sorts stably, so
+     `.last()` is the most recent update.
+   - Test: `test_elo_same_day_rounds_replayed_semi_then_final`. Athlete X
+     loses the semi and then wins the final. The final rows are listed first,
+     and the test also runs with the rows reversed. X's rating must dip and
+     then rise above 1500, and the lookup must return the post-final value.
+     I checked the numbers by hand: 1500 → 1488 → about 1500.5.
+2. **`backtest.SAME_DAY_EARLIER_ROUNDS`** (commit 4e374b9). Default False,
+   so the backtest output is unchanged.
+   - The problem: the backtest builds a final's stats from races strictly
+     before its date, so it never sees that day's semis. Live predictions
+     (`compute_all_time_stats`, cutoff = last date + 1 day) *do* see them.
+     So the backtest under-rates the model in exactly the situation users
+     care about: predicting a championship final after the semis are run.
+     A semi run hours earlier is also the freshest form signal there is.
+   - The fix: `features.known_before(df, cutoff, before_round)`. Given the
+     target race's round, it also admits rows from the same date whose round
+     comes earlier. Same-day rows with an unknown round stay out, and the
+     final itself can never get in. `compute_stats_before` and
+     `compute_reliability_before` take `before_round`. Elo still uses
+     strictly-earlier races. `evaluate_race` and `run_backtest` take
+     `same_day=`.
+   - `backtest.py` now ends with a paired-bootstrap log-loss comparison of
+     the setting against its opposite, overall and on the races that changed.
+   - Test: `test_same_day_earlier_rounds`. With the setting on, a same-day
+     semi is counted (races, starts, `days_since_last = 0`, faster form). A
+     heats race doesn't see it, an unknown round means off, and
+     `evaluate_race` works both ways.
+   - **Recommendation:** turn it on unless the comparison shows clear harm.
+     It's a fidelity fix to the evaluation more than a model change.
+
+### Research
+
+- Wind is not linear: drag goes with (v − w)², so a headwind costs more
+  time than the same tailwind gains. About 0.10 s for +2.0 m/s for men
+  ([Mureika, back-of-the-envelope wind/altitude correction](https://arxiv.org/pdf/physics/0006057);
+  [quasi-physical 100 m model](https://arxiv.org/pdf/physics/0007042);
+  [Linthorne, wind measurement accuracy](https://www.scribd.com/document/520728995/WindAccuracy-Linthorne)).
+  Our within-athlete fit is a single linear slope.
+- Championship scheduling (semis and final on the same evening) is why the
+  same-day handling matters. In our CSV, the Paris 2024 semi rows and final
+  rows carry the same date.
+
+### Ideas for next time
+
+1. **Let `py` run** (see round 4). Everything since round 1 is untested.
+2. Then run: tests (now 36 cases), `tune_prior` → `tune_spread` →
+   `tune_uncertainty` → `backtest.py`. Read the same-day comparison at the
+   end, and turn `SAME_DAY_EARLIER_ROUNDS` on if it's not worse. Also compare
+   the backtest headline numbers with the old `backtest_results.csv` to see
+   what the Elo fix did.
+3. Pass `before_round` through the three tuners too, if same-day goes on.
+   For now they call `compute_stats_before` directly, with it off.
+4. **Asymmetric wind:** fit `time ~ a·w + b·w·|w|` within athlete, in place
+   of the single slope. Adopt it only if `b` is clearly non-zero and the
+   backtest agrees.
+5. Same-day info for Elo: let the semi's Elo update count for the final.
+   Elo history would need a round column, or `compute_elo_before` would need
+   a round-aware cutoff.
+6. Still open: the stats cache for tuners, the season-phase offset, a
+   meeting-level prior offset, and `tune_indoor.py`.
