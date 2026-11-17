@@ -305,6 +305,29 @@ def test_elo_ranks_consistent_winner_highest(df):
     assert stats["elo"].idxmin() == "Dan D"
 
 
+def test_round_offsets_two_way_removes_mix_bias():
+    """A (10.00) runs 9 heats + 1 final, B (10.10) 1 heat + 9 finals; heats
+    are exactly 0.20 s slower. The one-pass within-athlete average gives
+    0.072 (hand-computed: heat rows avg +0.036, final rows -0.036); the
+    two-way fit recovers 0.20."""
+    rows = []
+    for name, ability, n_heats in [("A", 10.00, 9), ("B", 10.10, 1)]:
+        for i in range(10):
+            rnd = "heats" if i < n_heats else "final"
+            rows.append({"ATHLETE": name, "round": rnd, "adj_time": ability + (0.20 if rnd == "heats" else 0.0)})
+    d = pd.DataFrame(rows)
+    one_pass = features.estimate_round_offsets(d, two_way=False)
+    two_way = features.estimate_round_offsets(d, two_way=True)
+    assert one_pass["heats"] == pytest.approx(0.072, abs=1e-9)
+    assert two_way["heats"] == pytest.approx(0.20, abs=1e-6)
+    assert two_way["final"] == pytest.approx(0.0, abs=1e-12)
+    # With balanced round mixes the two methods agree.
+    bal = d.assign(round=["heats", "final"] * 10)
+    bal = bal.assign(adj_time=bal["ATHLETE"].map({"A": 10.0, "B": 10.1}) + (bal["round"] == "heats") * 0.2)
+    assert features.estimate_round_offsets(bal, two_way=False)["heats"] == pytest.approx(0.20)
+    assert features.estimate_round_offsets(bal, two_way=True)["heats"] == pytest.approx(0.20)
+
+
 def test_elo_same_day_rounds_replayed_semi_then_final():
     """Semi and final on one date: the final must update after the semi, and
     the lookup must return the post-final rating, whatever the row order."""

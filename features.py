@@ -64,6 +64,10 @@ ELO_K = 24
 ELO_ROUND_K = {"final": 1.0, "semi-final": 1.0, "heats": 1.0}
 # Order of rounds held on the same date (unknown rounds sort in the middle).
 ROUND_ORDER = {"heats": 0, "quarter-final": 1, "semi-final": 2, "final": 3}
+# Fit round offsets jointly with athlete ability (two-way fixed effects)
+# instead of the one-pass within-athlete average, which shrinks them toward 0
+# (see estimate_round_offsets). Default off until backtested (context.md).
+ROUND_OFFSETS_TWO_WAY = False
 
 
 def load_clean_data(csv_path="100m_races_dataset.csv"):
@@ -229,7 +233,25 @@ def estimate_wind_coefficient(df, min_races=3, min_wind_std=0.3):
     return (dt * dw).sum() / denom
 
 
-def estimate_round_offsets(df, baseline_round="final", min_races=3):
+def _two_way_round_effects(valid, max_iter=1000, tol=1e-9):
+    """Least-squares round effects in adj_time ~ athlete + round, by
+    alternating projections (backfitting): athlete means given round
+    effects, then round means given athlete means, until stable. Converges
+    to the exact two-way fixed-effects OLS solution (up to a constant)."""
+    y = valid["adj_time"].astype(float)
+    athlete, rnd = valid["ATHLETE"], valid["round"]
+    r = pd.Series(0.0, index=valid.index)
+    for _ in range(max_iter):
+        a = (y - r).groupby(athlete).transform("mean")
+        new_r = (y - a).groupby(rnd).transform("mean")
+        done = (new_r - r).abs().max() < tol
+        r = new_r
+        if done:
+            break
+    return r.groupby(rnd).first()
+
+
+def estimate_round_offsets(df, baseline_round="final", min_races=3, two_way=None):
     """Seconds each round tends to run slower/faster than an athlete's own
     final-round pace, estimated the same fixed-effects way as the wind
     coefficient: only compares an athlete against their own times across
@@ -239,7 +261,15 @@ def estimate_round_offsets(df, baseline_round="final", min_races=3):
 
     Returns {round_name: offset_seconds}, where offset is subtracted from
     adj_time to get a 'final-equivalent' estimate — heats typically comes
-    out positive since athletes often ease off once they've qualified."""
+    out positive since athletes often ease off once they've qualified.
+
+    two_way (None = ROUND_OFFSETS_TWO_WAY): the default one-pass method
+    (demean per athlete, then average by round) is biased toward 0 when
+    athletes' round mixes differ: a finalist's mean is mostly finals, a
+    heats-only-ish athlete's mostly heats, so each athlete's own mean
+    absorbs part of the round gap. two_way=True fits athlete + round jointly
+    (see _two_way_round_effects), which removes that bias."""
+    two_way = ROUND_OFFSETS_TWO_WAY if two_way is None else two_way
     valid = df.dropna(subset=["adj_time", "round"])
     counts = valid.groupby("ATHLETE").size()
     rounds_per_athlete = valid.groupby("ATHLETE")["round"].nunique()
@@ -249,8 +279,11 @@ def estimate_round_offsets(df, baseline_round="final", min_races=3):
     if len(valid) == 0:
         return {baseline_round: 0.0}
 
-    demeaned = valid["adj_time"] - valid.groupby("ATHLETE")["adj_time"].transform("mean")
-    round_effect = demeaned.groupby(valid["round"]).mean()
+    if two_way:
+        round_effect = _two_way_round_effects(valid)
+    else:
+        demeaned = valid["adj_time"] - valid.groupby("ATHLETE")["adj_time"].transform("mean")
+        round_effect = demeaned.groupby(valid["round"]).mean()
 
     baseline = round_effect.get(baseline_round, 0.0)
     return (round_effect - baseline).to_dict()
